@@ -86,6 +86,39 @@ print(data.isna().sum())
 country_names = data['Country Name'].tolist()
 country_data = data.drop(columns=['Country Name'])
 
+## ---- Manual norms and metric (no np.linalg.norm) ----
+def vec_norm(v, ord='2'):
+    v = np.asarray(v).reshape(-1)
+    if ord == '1':
+        return float(np.sum(np.abs(v)))
+    elif ord == '2':
+        return float(np.sqrt(np.sum(v * v)))
+    elif ord == 'inf':
+        return float(np.max(np.abs(v)))
+    else:
+        raise ValueError("ord must be '1','2','inf'")
+
+def lp_distance(a, b, ord='2'):
+    diff = np.asarray(a) - np.asarray(b)
+    return vec_norm(diff, ord)
+
+SELECTED_NORM = '2'  # change to '1' or 'inf' to switch
+METRIC_FN = lambda a, b: lp_distance(a, b, SELECTED_NORM)
+
+def pairwise_dist_matrix(X, ord=SELECTED_NORM):
+    A = X[:, None, :]
+    B = X[None, :, :]
+    diff = A - B
+    if ord == '1':
+        D = np.sum(np.abs(diff), axis=2)
+    elif ord == '2':
+        D = np.sqrt(np.sum(diff * diff, axis=2))
+    elif ord == 'inf':
+        D = np.max(np.abs(diff), axis=2)
+    else:
+        raise ValueError("ord must be '1','2','inf'")
+    return D
+
 ## Step 2: Clustering
 ### Step 2.0 Helper: PCA for 2D plots
 from sklearn.decomposition import PCA
@@ -107,7 +140,7 @@ import matplotlib.pyplot as plt
 # showed that 0.3-0.5 is an optimal eps value
 def plot_dbscan_possible_eps_values(X):
     min_samples = 5
-    neighbors = NearestNeighbors(n_neighbors=min_samples)
+    neighbors = NearestNeighbors(n_neighbors=min_samples, algorithm='brute', metric=METRIC_FN)
     neighbors_fit = neighbors.fit(X)
     (distances, _) = neighbors_fit.kneighbors(X)
 
@@ -127,7 +160,7 @@ def plot_dbscan_possible_eps_values(X):
 eps = 0.3
 min_samples = 3
 
-dbscan = DBSCAN(eps=eps, min_samples=min_samples)
+dbscan = DBSCAN(eps=eps, min_samples=min_samples, metric=METRIC_FN)
 labels = dbscan.fit_predict(X)
 
 n_clusters = len(set(labels)) - (1 if -1 in labels else 0)
@@ -144,12 +177,26 @@ print("Core countries and their cluster IDs:", list(zip(countries_core, cluster_
 
 ### Step 2.2: K-Means Clustering For Sub-Clusters and K-Medoids for Representatives
 from sklearn.cluster import KMeans
-from scipy.spatial.distance import cdist
 
 def medoid_index(X_sub):
     """Return the index (within X_sub) of the point minimizing total distance to all others."""
-    D = cdist(X_sub, X_sub, metric='euclidean')
-    return int(np.argmin(D.sum(axis=1)))
+    n = X_sub.shape[0]
+    totals = np.zeros(n, dtype=float)
+    if SELECTED_NORM == '1':
+        for i in range(n):
+            d = np.sum(np.abs(X_sub - X_sub[i]), axis=1)
+            totals[i] = np.sum(d)
+    elif SELECTED_NORM == '2':
+        for i in range(n):
+            d = np.sqrt(np.sum((X_sub - X_sub[i])**2, axis=1))
+            totals[i] = np.sum(d)
+    elif SELECTED_NORM == 'inf':
+        for i in range(n):
+            d = np.max(np.abs(X_sub - X_sub[i]), axis=1)
+            totals[i] = np.sum(d)
+    else:
+        raise ValueError("SELECTED_NORM must be '1','2','inf'")
+    return int(np.argmin(totals))
 
 kmeans_labels_global = np.full(len(X_core), fill_value=-1, dtype=int)
 subcluster_global_id = 0
@@ -170,9 +217,11 @@ for c in sorted(set(cluster_ids)):
         if len(set(lbl)) < 2:
             continue
         try:
-            s = silhouette_score(X_sub, lbl)
+            # try callable metric; if unsupported, fall back to precomputed
+            s = silhouette_score(X_sub, lbl, metric=METRIC_FN)
         except Exception:
-            s = -1
+            D = pairwise_dist_matrix(X_sub, ord=SELECTED_NORM)
+            s = silhouette_score(D, lbl, metric='precomputed')
         if s > best['score']:
             best = {'k': k, 'score': s, 'labels': lbl}
 
@@ -213,7 +262,6 @@ import mplcursors
 def add_shared_hover(ax, scatters, labels_list):
     artist2labels = {sc: np.asarray(lbls) for sc, lbls in zip(scatters, labels_list)}
     cursor = mplcursors.cursor(scatters, hover=True)
-
     @cursor.connect("add")
     def on_add(sel):
         labels = artist2labels[sel.artist]
@@ -250,7 +298,6 @@ add_shared_hover(ax, [sc_k], [countries_core])
 ax.set_title("Level 2 – K-Means Subclusters (within DBSCAN Groups)")
 plt.tight_layout()
 plt.show()
-
 
 ### Step 3.3: K-Medoids Representative Visualization
 if len(medoids) > 0:
