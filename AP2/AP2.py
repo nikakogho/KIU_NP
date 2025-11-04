@@ -208,16 +208,33 @@ for m in medoids:
 print(np.unique(kmeans_labels_global, return_counts=True))
 
 ## Step 3: Visualization
+import mplcursors
+
+def add_shared_hover(ax, scatters, labels_list):
+    artist2labels = {sc: np.asarray(lbls) for sc, lbls in zip(scatters, labels_list)}
+    cursor = mplcursors.cursor(scatters, hover=True)
+
+    @cursor.connect("add")
+    def on_add(sel):
+        labels = artist2labels[sel.artist]
+        sel.annotation.set_text(str(labels[sel.index]))
+
 ### Step 3.1: DBSCAN Visualization
 pca = PCA(n_components=2, random_state=42)
 XY = pca.fit_transform(X)
 
 plt.figure(figsize=(7,6))
 mask_noise = labels == -1
-plt.scatter(XY[~mask_noise,0], XY[~mask_noise,1],
+ax = plt.gca()
+sc_clusters = plt.scatter(XY[~mask_noise,0], XY[~mask_noise,1],
             c=labels[~mask_noise], cmap='tab10', s=60, label='Clusters')
-plt.scatter(XY[mask_noise,0], XY[mask_noise,1],
+sc_noise = plt.scatter(XY[mask_noise,0], XY[mask_noise,1],
             c='k', s=30, alpha=0.5, label='Noise')
+add_shared_hover(
+    ax,
+    [sc_clusters, sc_noise],
+    [np.array(country_names)[~mask_noise], np.array(country_names)[mask_noise]]
+)
 plt.title("Level 1 – DBSCAN Clusters (PCA Projection)")
 plt.legend()
 plt.tight_layout()
@@ -226,9 +243,30 @@ plt.show()
 ### Step 3.2: K-Means Subcluster Visualization
 XY_core = pca.fit_transform(X_core)
 
-plt.figure(figsize=(7,6))
-plt.scatter(XY_core[:,0], XY_core[:,1],
-            c=kmeans_labels_global, s=60, cmap='tab20')
-plt.title("Level 2 – K-Means Subclusters (within DBSCAN Groups)")
+fig, ax = plt.subplots(figsize=(7,6))
+sc_k = ax.scatter(XY_core[:,0], XY_core[:,1],
+                  c=kmeans_labels_global, s=60, cmap='tab20')
+add_shared_hover(ax, [sc_k], [countries_core])
+ax.set_title("Level 2 – K-Means Subclusters (within DBSCAN Groups)")
 plt.tight_layout()
 plt.show()
+
+
+### Step 3.3: K-Medoids Representative Visualization
+if len(medoids) > 0:
+    fig, ax = plt.subplots(figsize=(7,6))
+    sc_sub = ax.scatter(XY_core[:,0], XY_core[:,1],
+                        c=kmeans_labels_global, s=36, alpha=0.9, cmap='tab20', label='Subclusters')
+    add_shared_hover(ax, [sc_sub], [countries_core])
+
+    medoid_names = [m['medoid_country'] for m in medoids]
+    medoid_indices = [np.where(countries_core == name)[0][0] for name in medoid_names]
+    ax.scatter(XY_core[medoid_indices,0], XY_core[medoid_indices,1],
+               s=200, facecolors='none', edgecolors='black', linewidths=2, label='Medoids')
+    for idx, name in zip(medoid_indices, medoid_names):
+        ax.text(XY_core[idx,0]+0.02, XY_core[idx,1]+0.02, name, fontsize=8)
+
+    ax.set_title("Level 3 – K-Medoids Representatives (PCA Projection)")
+    ax.legend()
+    plt.tight_layout()
+    plt.show()
