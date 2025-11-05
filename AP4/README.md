@@ -11,7 +11,7 @@ All outputs are saved into the plots folder (auto-created if missing).
 
 ## Key ideas and approach
 
-* Sphere representation: Points on the sphere are 3D unit vectors (x, y, z) with norm 1 (could expand for more ambitious takes of "layered dyson sphere"/"matryoshka brain" with multiple surfaces around the sun but keeping it simple for this task).
+* Sphere representation: Points on the sphere are 3D unit vectors (x, y, z) with norm 1 (could expand for more ambitious takes of "layered dyson sphere"/"matryoshka brain" with multiple surfaces around the sun but keeping it simple for this task. See "README_matryoshka_brain.md" for that).
 * Site distribution: Uses a Fibonacci spiral (a standard low-discrepancy method) to place N modules nearly uniformly on the sphere; optional small random jitter is added and then re-normalized to the sphere.
 * Distance on a sphere: Angular distance is computed via the arccosine of the dot product between unit vectors; for nearest-neighbor tasks we work directly with dot products to avoid expensive arccos everywhere.
 * Delaunay-like neighbor graph: True spherical Delaunay triangulation is nontrivial. We approximate it by connecting each site to its k nearest neighbors on the sphere (based on largest dot products), then draw great-circle arcs between them.
