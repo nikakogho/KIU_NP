@@ -1,0 +1,838 @@
+%PDF-1.4
+%‚„œ”
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R 4 0 R 5 0 R 6 0 R 7 0 R 8 0 R 9 0 R 10 0 R] /Count 8 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842]
+   /Resources << /Font << /F1 11 0 R >> >>
+   /Contents 12 0 R >>
+endobj
+4 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842]
+   /Resources << /Font << /F1 11 0 R >> >>
+   /Contents 13 0 R >>
+endobj
+5 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842]
+   /Resources << /Font << /F1 11 0 R >> >>
+   /Contents 14 0 R >>
+endobj
+6 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842]
+   /Resources << /Font << /F1 11 0 R >> >>
+   /Contents 15 0 R >>
+endobj
+7 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842]
+   /Resources << /Font << /F1 11 0 R >> >>
+   /Contents 16 0 R >>
+endobj
+8 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842]
+   /Resources << /Font << /F1 11 0 R >> >>
+   /Contents 17 0 R >>
+endobj
+9 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842]
+   /Resources << /Font << /F1 11 0 R >> >>
+   /Contents 18 0 R >>
+endobj
+10 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842]
+   /Resources << /Font << /F1 11 0 R >> >>
+   /Contents 19 0 R >>
+endobj
+11 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+12 0 obj
+<< /Length 155 >>
+stream
+BT
+/F1 11 Tf
+1 0 0 1 72 800 Tm
+14 TL
+(Nika Koghuashvili) Tj
+T*
+(KIU) Tj
+T*
+(Numerical Programming) Tj
+T*
+(Computational Project 1) Tj
+T*
+() Tj
+T*
+() Tj
+ET
+endstream
+endobj
+13 0 obj
+<< /Length 2825 >>
+stream
+BT
+/F1 11 Tf
+1 0 0 1 72 800 Tm
+14 TL
+(Object Tracking and Higher-Order Motion Analysis in Video) Tj
+T*
+(=========================================================) Tj
+T*
+() Tj
+T*
+(1. Problem Statement and Goals) Tj
+T*
+(------------------------------) Tj
+T*
+() Tj
+T*
+(The goal of this project is to implement simple object recognition and motion) Tj
+T*
+(analysis in video without using any pretrained models. Given a video with a) Tj
+T*
+(static, stationary background and one or more moving objects, we want to:) Tj
+T*
+() Tj
+T*
+(- Detect and track each moving object over time.) Tj
+T*
+(- Compute its kinematic quantities in pixel units:) Tj
+T*
+(  * Velocity \(first derivative of position, px/s\)) Tj
+T*
+(  * Acceleration \(second derivative of position, px/s^2\)) Tj
+T*
+(  * Jerk \(third derivative of position, px/s^3\)) Tj
+T*
+(  * Jounce \(fourth derivative of position, px/s^4\)) Tj
+T*
+(- Optionally convert these to physical units \(m/s, m/s^2, ...\) when) Tj
+T*
+(  calibration information is available.) Tj
+T*
+(- Apply clustering in motion-feature space, using norms that incorporate) Tj
+T*
+(  derivatives, to group objects with similar motion patterns.) Tj
+T*
+(- Visualize results in an overlay video: for each tracked object, draw a) Tj
+T*
+(  rectangle around it and print its velocity, acceleration, jerk, and jounce.) Tj
+T*
+() Tj
+T*
+(We implement two versions:) Tj
+T*
+() Tj
+T*
+(- A from-scratch version where almost all vision logic \(background modeling,) Tj
+T*
+(  foreground segmentation, morphology, connected components, tracking,) Tj
+T*
+(  derivatives\) is written using only NumPy, and OpenCV is used strictly for) Tj
+T*
+(  video I/O and drawing.) Tj
+T*
+(- A library-based version that uses OpenCV background subtraction and) Tj
+T*
+(  scikit-learn DBSCAN clustering to show how built-in tools simplify parts of) Tj
+T*
+(  the pipeline.) Tj
+T*
+() Tj
+T*
+(2. Algorithm Overview) Tj
+T*
+(---------------------) Tj
+T*
+() Tj
+T*
+(Both implementations follow the same pipeline:) Tj
+T*
+() Tj
+T*
+(1\) Preprocessing) Tj
+T*
+(   - Read frames, convert to grayscale, optionally downscale to speed up) Tj
+T*
+(     processing.) Tj
+T*
+() Tj
+T*
+(2\) Background modeling and foreground segmentation) Tj
+T*
+(   - Estimate the static background.) Tj
+T*
+(   - Subtract background and threshold to obtain a binary foreground mask.) Tj
+T*
+(   - Apply morphological opening and closing to clean noise.) Tj
+T*
+() Tj
+T*
+(3\) Connected components and object detection) Tj
+T*
+(   - Detect blobs \(connected components\) in the binary mask.) Tj
+T*
+(   - For each blob, compute centroid and bounding box.) Tj
+T*
+() Tj
+T*
+(4\) Multi-object tracking) Tj
+T*
+(   - For each frame, associate detections with existing tracks using a greedy) Tj
+T*
+(     nearest-neighbor rule in pixel space.) Tj
+T*
+(   - Unmatched detections start new tracks.) Tj
+ET
+endstream
+endobj
+14 0 obj
+<< /Length 2563 >>
+stream
+BT
+/F1 11 Tf
+1 0 0 1 72 800 Tm
+14 TL
+() Tj
+T*
+(5\) Kinematics) Tj
+T*
+(   - For each track, build time series of \(x, y\) centroid positions.) Tj
+T*
+(   - Compute first, second, third, and fourth derivatives with respect to) Tj
+T*
+(     time: velocity, acceleration, jerk, and jounce.) Tj
+T*
+() Tj
+T*
+(6\) Clustering \(library version\)) Tj
+T*
+(   - For each track, compute motion summary features:) Tj
+T*
+(       [mean_speed, max_speed, mean_abs_accel,) Tj
+T*
+(        mean_abs_jerk, mean_abs_jounce].) Tj
+T*
+(   - Cluster tracks using DBSCAN in this feature space, which implicitly) Tj
+T*
+(     defines a norm that includes derivatives.) Tj
+T*
+() Tj
+T*
+(7\) Visualization) Tj
+T*
+(   - Re-read the original video.) Tj
+T*
+(   - For each frame, draw a rectangle around each tracked object and annotate) Tj
+T*
+(     kinematic values.) Tj
+T*
+(   - Write the result into an output mp4 file.) Tj
+T*
+() Tj
+T*
+(3. Preprocessing and Background Modeling) Tj
+T*
+(----------------------------------------) Tj
+T*
+() Tj
+T*
+(Each frame is read from the input video using OpenCV VideoCapture. We convert) Tj
+T*
+(BGR to grayscale using a standard luminance formula:) Tj
+T*
+() Tj
+T*
+(    gray = 0.299 * R + 0.587 * G + 0.114 * B) Tj
+T*
+() Tj
+T*
+(In the from-scratch version this conversion is implemented manually with NumPy,) Tj
+T*
+(followed by optional downscaling by a factor K \(for example 2 or 4\) using) Tj
+T*
+(simple subsampling. This reduces spatial resolution but speeds up subsequent) Tj
+T*
+(operations roughly by a factor of K^2.) Tj
+T*
+() Tj
+T*
+(For the from-scratch background model we assume a static camera and static) Tj
+T*
+(background. We build a reference background B\(x, y\) by averaging the first N) Tj
+T*
+(frames F_t\(x, y\):) Tj
+T*
+() Tj
+T*
+(    B\(x, y\) = \(1 / N\) * sum_{t = 0 to N-1} F_t\(x, y\)) Tj
+T*
+() Tj
+T*
+(Given a new frame F_t, we compute an absolute difference) Tj
+T*
+() Tj
+T*
+(    D_t\(x, y\) = |F_t\(x, y\) - B\(x, y\)|) Tj
+T*
+() Tj
+T*
+(and threshold it:) Tj
+T*
+() Tj
+T*
+(    M_t\(x, y\) = 1 if D_t\(x, y\) > tau) Tj
+T*
+(                0 otherwise) Tj
+T*
+() Tj
+T*
+(This yields a binary mask M_t that marks foreground \(moving\) pixels. We then) Tj
+T*
+(apply custom 3x3 erosion and dilation, and combine them as opening plus closing) Tj
+T*
+(to remove isolated noise and fill small gaps.) Tj
+T*
+() Tj
+T*
+(In the library-based version we use OpenCV createBackgroundSubtractorMOG2, plus) Tj
+T*
+(thresholding and built-in morphology. This is more robust to slow illumination) Tj
+T*
+(changes but follows the same conceptual idea.) Tj
+T*
+() Tj
+ET
+endstream
+endobj
+15 0 obj
+<< /Length 2541 >>
+stream
+BT
+/F1 11 Tf
+1 0 0 1 72 800 Tm
+14 TL
+(4. Connected Components and Bounding Boxes) Tj
+T*
+(------------------------------------------) Tj
+T*
+() Tj
+T*
+(On the cleaned binary mask we detect 8-connected components. In the) Tj
+T*
+(from-scratch version we implement a BFS flood-fill over all foreground pixels.) Tj
+T*
+(For each component we accumulate:) Tj
+T*
+() Tj
+T*
+(- area = number of pixels) Tj
+T*
+(- sum_x, sum_y = sums of x and y coordinates) Tj
+T*
+(- min_x, max_x, min_y, max_y = bounding box coordinates) Tj
+T*
+() Tj
+T*
+(After BFS, components with area >= MIN_AREA are accepted. For each accepted) Tj
+T*
+(component we compute:) Tj
+T*
+() Tj
+T*
+(- centroid: \(cx, cy\) = \(sum_x / area, sum_y / area\)) Tj
+T*
+(- bounding box: \(min_x, min_y, max_x, max_y\)) Tj
+T*
+() Tj
+T*
+(In the library version we use cv2.connectedComponentsWithStats, which provides) Tj
+T*
+(the same information directly.) Tj
+T*
+() Tj
+T*
+(The centroids are used as measurements for tracking, and the bounding boxes are) Tj
+T*
+(later scaled back up and drawn as rectangles on the full-resolution video.) Tj
+T*
+() Tj
+T*
+(5. Greedy Nearest-Neighbor Tracking) Tj
+T*
+(-----------------------------------) Tj
+T*
+() Tj
+T*
+(We represent each tracked object as a Track structure with fields:) Tj
+T*
+() Tj
+T*
+(- id        integer track id) Tj
+T*
+(- frames    list of frame indices) Tj
+T*
+(- xs, ys    lists of centroid coordinates in downscaled pixel space) Tj
+T*
+() Tj
+T*
+(For each frame we have a set of detection centroids d_1, d_2, ... We associate) Tj
+T*
+(them to existing tracks using a greedy nearest-neighbor strategy:) Tj
+T*
+() Tj
+T*
+(1\) For each existing track, take its last known position \(x_last, y_last\).) Tj
+T*
+(2\) Compute Euclidean distances to all detections.) Tj
+T*
+(3\) Attach the closest detection within MAX_TRACK_DIST to that track, and mark) Tj
+T*
+(   it as assigned.) Tj
+T*
+(4\) After all active tracks are updated, any remaining unassigned detections) Tj
+T*
+(   start new tracks.) Tj
+T*
+() Tj
+T*
+(This simple strategy works well when objects move smoothly between frames and) Tj
+T*
+(do not intersect or heavily occlude one another.) Tj
+T*
+() Tj
+T*
+(6. Kinematics: Velocity, Acceleration, Jerk, Jounce) Tj
+T*
+(----------------------------------------------------) Tj
+T*
+() Tj
+T*
+(For each track we obtain:) Tj
+T*
+() Tj
+T*
+(- times t_i = frame_i / fps) Tj
+T*
+(- positions x_i, y_i in pixel coordinates) Tj
+T*
+() Tj
+T*
+(We approximate derivatives using central finite differences for irregular time) Tj
+T*
+(steps. For a sequence x\(t\) we compute:) Tj
+ET
+endstream
+endobj
+16 0 obj
+<< /Length 2403 >>
+stream
+BT
+/F1 11 Tf
+1 0 0 1 72 800 Tm
+14 TL
+() Tj
+T*
+(- velocity v_x = dx/dt) Tj
+T*
+(- acceleration a_x = dv_x/dt) Tj
+T*
+(- jerk j_x = da_x/dt) Tj
+T*
+(- jounce s_x = dj_x/dt) Tj
+T*
+() Tj
+T*
+(and similarly for y. We then compute magnitudes:) Tj
+T*
+() Tj
+T*
+(    speed       = sqrt\(v_x^2 + v_y^2\)) Tj
+T*
+(    accel_mag   = sqrt\(a_x^2 + a_y^2\)) Tj
+T*
+(    jerk_mag    = sqrt\(j_x^2 + j_y^2\)) Tj
+T*
+(    jounce_mag  = sqrt\(s_x^2 + s_y^2\)) Tj
+T*
+() Tj
+T*
+(We summarize each track by:) Tj
+T*
+() Tj
+T*
+(- mean_speed) Tj
+T*
+(- max_speed) Tj
+T*
+(- mean_abs_accel) Tj
+T*
+(- mean_abs_jerk) Tj
+T*
+(- mean_abs_jounce) Tj
+T*
+() Tj
+T*
+(Why jerk and jounce matter:) Tj
+T*
+() Tj
+T*
+(- Velocity describes how fast an object moves.) Tj
+T*
+(- Acceleration describes how quickly its speed or direction changes.) Tj
+T*
+(- Jerk is the rate of change of acceleration. High jerk indicates rapid starts,) Tj
+T*
+(  stops, or sharp turns. It is important in comfort and mechanical stress) Tj
+T*
+(  analysis \(for example in vehicles or robots\).) Tj
+T*
+(- Jounce is the rate of change of jerk. It is extremely sensitive to small) Tj
+T*
+(  fluctuations and therefore reveals very rough or noisy motion. In our case,) Tj
+T*
+(  jounce is also a useful indicator of tracking noise.) Tj
+T*
+() Tj
+T*
+(7. Clustering in Motion-Feature Space \(DBSCAN\)) Tj
+T*
+(----------------------------------------------) Tj
+T*
+() Tj
+T*
+(To explore clustering with norms that incorporate derivatives we construct a) Tj
+T*
+(feature vector for each track:) Tj
+T*
+() Tj
+T*
+(    f = [mean_speed, max_speed,) Tj
+T*
+(         mean_abs_accel, mean_abs_jerk, mean_abs_jounce]) Tj
+T*
+() Tj
+T*
+(This embeds both position derivatives and their magnitudes in a five-dimensional) Tj
+T*
+(feature space. Two tracks that have similar speeds but very different jerk or) Tj
+T*
+(jounce will be far apart in this space.) Tj
+T*
+() Tj
+T*
+(We standardize the feature matrix and run DBSCAN. DBSCAN groups tracks with) Tj
+T*
+(similar motion patterns into clusters and labels outliers with -1. The cluster) Tj
+T*
+(id is displayed along with the track id in the overlay video, for example:) Tj
+T*
+() Tj
+T*
+(    ID 3 \(C1\)  meaning  track 3 in cluster 1.) Tj
+T*
+() Tj
+T*
+(By changing the relative weighting of derivatives in the feature vector we can) Tj
+T*
+(change the effective norm and therefore the clustering behavior.) Tj
+T*
+() Tj
+T*
+(8. Conversion to Physical Units) Tj
+ET
+endstream
+endobj
+17 0 obj
+<< /Length 2292 >>
+stream
+BT
+/F1 11 Tf
+1 0 0 1 72 800 Tm
+14 TL
+(-------------------------------) Tj
+T*
+() Tj
+T*
+(Our kinematic quantities are computed in pixel units:) Tj
+T*
+() Tj
+T*
+(- v_px     in px/s) Tj
+T*
+(- a_px     in px/s^2) Tj
+T*
+(- jerk_px  in px/s^3) Tj
+T*
+(- jounce_px in px/s^4) Tj
+T*
+() Tj
+T*
+(If we know a scale factor S in meters per pixel \(m/px\), for example from the) Tj
+T*
+(known diameter of the ball or from calibration markers, then we can convert:) Tj
+T*
+() Tj
+T*
+(- v_real     = S * v_px       \(m/s\)) Tj
+T*
+(- a_real     = S * a_px       \(m/s^2\)) Tj
+T*
+(- jerk_real  = S * jerk_px    \(m/s^3\)) Tj
+T*
+(- jounce_real= S * jounce_px  \(m/s^4\)) Tj
+T*
+() Tj
+T*
+(This conversion is valid if the motion is approximately in the image plane and) Tj
+T*
+(the perspective distortion is small. For more complex 3D motion, full camera) Tj
+T*
+(calibration and 3D reconstruction would be required.) Tj
+T*
+() Tj
+T*
+(9. Experiments) Tj
+T*
+(--------------) Tj
+T*
+() Tj
+T*
+(We tested the method on three types of videos.) Tj
+T*
+() Tj
+T*
+(9.1 Video A: Single Object, Static Background \(Success\)) Tj
+T*
+() Tj
+T*
+(- One bright ball rolling across a clean, static floor.) Tj
+T*
+(- Camera fixed on a tripod, no panning or zoom.) Tj
+T*
+(- Background is simple and high-contrast.) Tj
+T*
+(- No other moving objects.) Tj
+T*
+() Tj
+T*
+(In this scenario:) Tj
+T*
+() Tj
+T*
+(- Background subtraction produces a clean mask.) Tj
+T*
+(- Connected components detect exactly one blob per frame.) Tj
+T*
+(- The greedy tracker produces a single, stable track.) Tj
+T*
+(- Velocity, acceleration, jerk, and jounce are smooth and physically) Tj
+T*
+(  reasonable.) Tj
+T*
+() Tj
+T*
+(9.2 Video B: Multiple Objects \(5 or more\)) Tj
+T*
+() Tj
+T*
+(- Several objects \(balls or cars\) moving on a static track.) Tj
+T*
+(- Camera fixed; background is static.) Tj
+T*
+(- Objects differ in speed and possibly size.) Tj
+T*
+() Tj
+T*
+(Here:) Tj
+T*
+() Tj
+T*
+(- The method detects multiple blobs per frame.) Tj
+T*
+(- The tracker successfully maintains separate tracks for most objects, as long) Tj
+T*
+(  as they do not heavily occlude each other.) Tj
+T*
+(- The library-based version clusters tracks according to motion features:) Tj
+T*
+(  some clusters correspond to slow and smooth trajectories, others to faster) Tj
+T*
+(  or more jerky ones.) Tj
+ET
+endstream
+endobj
+18 0 obj
+<< /Length 2529 >>
+stream
+BT
+/F1 11 Tf
+1 0 0 1 72 800 Tm
+14 TL
+() Tj
+T*
+(9.3 Video C: Moving Background or Camera Shake \(Failure\)) Tj
+T*
+() Tj
+T*
+(We also tested a failure case where:) Tj
+T*
+() Tj
+T*
+(- The camera slightly moves \(hand-held\), or) Tj
+T*
+(- The background itself is dynamic \(people walking, trees moving, strong) Tj
+T*
+(  shadows\).) Tj
+T*
+() Tj
+T*
+(In such cases:) Tj
+T*
+() Tj
+T*
+(- Background subtraction marks large parts of the image as foreground.) Tj
+T*
+(- Connected components include many false blobs.) Tj
+T*
+(- Tracks fragment, merge incorrectly, or jump between objects.) Tj
+T*
+(- Higher-order derivatives \(especially jerk and jounce\) become dominated by) Tj
+T*
+(  noise and do not reflect real physical motion.) Tj
+T*
+() Tj
+T*
+(10. Why It Works and When It Fails) Tj
+T*
+(----------------------------------) Tj
+T*
+() Tj
+T*
+(The algorithm assumes:) Tj
+T*
+() Tj
+T*
+(1\) Static camera and static background.) Tj
+T*
+(2\) Moderate inter-frame motion so that centroids do not jump too far.) Tj
+T*
+(3\) Limited and short occlusions.) Tj
+T*
+(4\) Reasonable contrast between objects and background.) Tj
+T*
+() Tj
+T*
+(In Videos A and B these assumptions largely hold, so the method works well.) Tj
+T*
+(In Video C one or more assumptions fail, which breaks background subtraction) Tj
+T*
+(and data association, and therefore corrupts the kinematic estimates.) Tj
+T*
+() Tj
+T*
+(Understanding these limitations is crucial: it shows that classical background) Tj
+T*
+(subtraction plus centroid tracking is well suited to controlled scenes but not) Tj
+T*
+(to crowded, dynamic, or hand-held camera footage.) Tj
+T*
+() Tj
+T*
+(11. Conclusions) Tj
+T*
+(---------------) Tj
+T*
+() Tj
+T*
+(We have implemented a complete pipeline for multi-object motion analysis using) Tj
+T*
+(simple computer vision tools:) Tj
+T*
+() Tj
+T*
+(- From-scratch background subtraction, morphology, connected components, and) Tj
+T*
+(  greedy tracking with NumPy.) Tj
+T*
+(- A second version that uses OpenCV background subtraction and scikit-learn) Tj
+T*
+(  DBSCAN for clustering.) Tj
+T*
+() Tj
+T*
+(We computed position, velocity, acceleration, jerk, and jounce in pixel units,) Tj
+T*
+(visualized them as overlays on the original video, and showed how derivative-) Tj
+T*
+(based features can be used in a clustering algorithm.) Tj
+T*
+() Tj
+T*
+(The experiments demonstrate:) Tj
+T*
+() Tj
+T*
+(- Strong performance on videos with static backgrounds and moderate motion.) Tj
+T*
+(- Clear failure modes when the background or camera moves or when occlusions) Tj
+T*
+(  are severe.) Tj
+ET
+endstream
+endobj
+19 0 obj
+<< /Length 426 >>
+stream
+BT
+/F1 11 Tf
+1 0 0 1 72 800 Tm
+14 TL
+() Tj
+T*
+(Possible future improvements include:) Tj
+T*
+() Tj
+T*
+(- Temporal smoothing or Kalman filters to stabilize trajectories and reduce) Tj
+T*
+(  noise in higher-status derivatives.) Tj
+T*
+(- More robust data association \(for example the Hungarian algorithm\) for) Tj
+T*
+(  crowded scenes.) Tj
+T*
+(- Full metric calibration to convert from pixels to physical units in meters.) Tj
+ET
+endstream
+endobj
+xref
+0 20
+0000000000 65535 f 
+0000000015 00000 n 
+0000000064 00000 n 
+0000000164 00000 n 
+0000000298 00000 n 
+0000000432 00000 n 
+0000000566 00000 n 
+0000000700 00000 n 
+0000000834 00000 n 
+0000000968 00000 n 
+0000001102 00000 n 
+0000001237 00000 n 
+0000001308 00000 n 
+0000001514 00000 n 
+0000004391 00000 n 
+0000007006 00000 n 
+0000009599 00000 n 
+0000012054 00000 n 
+0000014398 00000 n 
+0000016979 00000 n 
+trailer
+<< /Size 20 /Root 1 0 R >>
+startxref
+17456
+%%EOF
