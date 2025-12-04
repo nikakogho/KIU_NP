@@ -4,7 +4,7 @@ From-scratch multi-object tracking + kinematics + overlay video.
 - Uses OpenCV ONLY to:
     * Read the .mp4
     * Write the output .mp4
-    * Draw circles / text for visualization
+    * Draw rectangles / text for visualization
 
 - All "vision logic" (background, threshold, morphology, connected components,
   tracking, derivatives, clustering) is implemented with NumPy / pure Python.
@@ -116,7 +116,12 @@ def connected_components(mask: np.ndarray, min_area: int = 30):
     Simple 8-connected components for binary mask (0/1).
 
     Returns a list of dicts:
-        { 'label': int, 'area': int, 'centroid': np.array([cx, cy]) }
+        {
+          'label': int,
+          'area': int,
+          'centroid': np.array([cx, cy]),
+          'bbox': (min_x, min_y, max_x, max_y)  # in (x,y) indices, downscaled coords
+        }
     """
     H, W = mask.shape
     visited = np.zeros_like(mask, dtype=bool)
@@ -132,15 +137,29 @@ def connected_components(mask: np.ndarray, min_area: int = 30):
             q = deque()
             q.append((y, x))
             visited[y, x] = True
+
             sum_x = 0.0
             sum_y = 0.0
             count = 0
+
+            # bounding box init
+            min_x = x
+            max_x = x
+            min_y = y
+            max_y = y
 
             while q:
                 cy, cx = q.popleft()
                 sum_x += cx
                 sum_y += cy
                 count += 1
+
+                # update bbox
+                if cx < min_x: min_x = cx
+                if cx > max_x: max_x = cx
+                if cy < min_y: min_y = cy
+                if cy > max_y: max_y = cy
+
                 for ny in range(cy - 1, cy + 2):
                     for nx in range(cx - 1, cx + 2):
                         if ny < 0 or ny >= H or nx < 0 or nx >= W:
@@ -157,6 +176,7 @@ def connected_components(mask: np.ndarray, min_area: int = 30):
                     "label": label,
                     "area": count,
                     "centroid": np.array([cx_mean, cy_mean], dtype=np.float32),
+                    "bbox": (min_x, min_y, max_x, max_y),
                 })
 
     return components
@@ -179,6 +199,7 @@ def update_tracks(tracks, detections, frame_idx, max_distance, next_track_id):
     Greedy nearest-neighbor association:
     - For each track, attach the closest detection if within max_distance.
     - Unassigned detections start new tracks.
+    detections: list of [cx, cy] in downscaled coords.
     """
     if len(detections) == 0:
         return tracks, next_track_id
@@ -407,12 +428,17 @@ def main(VIDEO_PATH, OUTPUT_VIDEO_PATH):
     tracks = []
     next_track_id = 0
 
+    # Store per-frame components (with bbox) for later overlay
+    frame_components = []  # list of list[component dict]
+
     print("Processing frames (foreground + tracking)...")
     for t in range(T):
         frame_small = frames_small[t]
         mask = foreground_mask(frame_small, bg_small, thresh=THRESH)
         mask = open_close(mask)
         comps = connected_components(mask, min_area=MIN_AREA)
+        frame_components.append(comps)
+
         detections_small = [c["centroid"] for c in comps]
         tracks, next_track_id = update_tracks(
             tracks,
@@ -436,9 +462,10 @@ def main(VIDEO_PATH, OUTPUT_VIDEO_PATH):
         motion = compute_motion_for_track(tr, fps)
         track_motions[tr.id] = motion
 
-    # ---------- 6) Build per-frame overlay info ----------
-    # For each frame t, we store list of:
-    # { 'id', 'x_small', 'y_small', 'speed', 'accel', 'jerk', 'jounce' }
+    # ---------- 6) Build per-frame overlay info WITH BBOX ----------
+    # For each frame t, store list of:
+    # { 'id', 'xmin_small', 'ymin_small', 'xmax_small', 'ymax_small',
+    #   'speed', 'accel', 'jerk', 'jounce' }
     per_frame_info = [[] for _ in range(T)]
 
     for tr in tracks:
@@ -452,16 +479,39 @@ def main(VIDEO_PATH, OUTPUT_VIDEO_PATH):
         jounce = m["jounce_mag"]    # px/s^4
 
         for idx, f in enumerate(frames):
-            if 0 <= f < T:
-                per_frame_info[f].append({
-                    "id": tr.id,
-                    "x_small": float(xs[idx]),
-                    "y_small": float(ys[idx]),
-                    "speed": float(speed[idx]),
-                    "accel": float(accel[idx]),
-                    "jerk": float(jerk[idx]),
-                    "jounce": float(jounce[idx]),
-                })
+            if not (0 <= f < T):
+                continue
+
+            fx = float(xs[idx])
+            fy = float(ys[idx])
+
+            comps = frame_components[f]
+            if comps:
+                centroids = np.array([c["centroid"] for c in comps], dtype=np.float32)
+                dists = np.linalg.norm(
+                    centroids - np.array([fx, fy], dtype=np.float32)[None, :],
+                    axis=1
+                )
+                best_idx = int(np.argmin(dists))
+                min_x, min_y, max_x, max_y = comps[best_idx]["bbox"]
+            else:
+                # fallback small box around centroid
+                min_x = fx - 5
+                max_x = fx + 5
+                min_y = fy - 5
+                max_y = fy + 5
+
+            per_frame_info[f].append({
+                "id": tr.id,
+                "xmin_small": float(min_x),
+                "ymin_small": float(min_y),
+                "xmax_small": float(max_x),
+                "ymax_small": float(max_y),
+                "speed": float(speed[idx]),
+                "accel": float(accel[idx]),
+                "jerk": float(jerk[idx]),
+                "jounce": float(jounce[idx]),
+            })
 
     # ---------- 7) Second pass: draw overlay and write video ----------
     print("Writing overlay video...")
@@ -469,10 +519,8 @@ def main(VIDEO_PATH, OUTPUT_VIDEO_PATH):
     if not cap.isOpened():
         raise IOError(f"Could not reopen video: {VIDEO_PATH}")
 
-    # Ensure we only read T frames for overlay, same as processed
     fourcc = cv2.VideoWriter_fourcc(*"mp4v")
     out = cv2.VideoWriter(OUTPUT_VIDEO_PATH, fourcc, fps, (width, height))
-
     font = cv2.FONT_HERSHEY_SIMPLEX
 
     for t in range(T):
@@ -483,20 +531,26 @@ def main(VIDEO_PATH, OUTPUT_VIDEO_PATH):
         info_list = per_frame_info[t]
 
         for info in info_list:
-            # Map from downscaled coords to original coords
-            cx_full = int(info["x_small"] * DOWNSCALE)
-            cy_full = int(info["y_small"] * DOWNSCALE)
+            # Scale bbox from downscaled coords to full-res coords
+            xmin_full = int(info["xmin_small"] * DOWNSCALE)
+            ymin_full = int(info["ymin_small"] * DOWNSCALE)
+            xmax_full = int(info["xmax_small"] * DOWNSCALE)
+            ymax_full = int(info["ymax_small"] * DOWNSCALE)
 
-            # Draw a circle to mark object center
-            cv2.circle(frame, (cx_full, cy_full), 10, (0, 255, 0), 2)
+            # Draw rectangle around object
+            cv2.rectangle(
+                frame,
+                (xmin_full, ymin_full),
+                (xmax_full, ymax_full),
+                (0, 255, 0),
+                2,
+            )
 
-            # Prepare text lines (px units)
             v = info["speed"]
             a = info["accel"]
             j = info["jerk"]
             jo = info["jounce"]
 
-            # Few decimals is enough; you're mostly showing relative differences
             lines = [
                 f"ID {info['id']}",
                 f"v={v:.1f} px/s",
@@ -505,10 +559,9 @@ def main(VIDEO_PATH, OUTPUT_VIDEO_PATH):
                 f"jnc={jo:.1f} px/s^4",
             ]
 
-            # Text position – shift a bit from the circle so it doesn't overlap
-            x0 = cx_full + 15
-            y0 = max(15, cy_full - 30)
-
+            # Put text above the rectangle
+            x0 = xmin_full
+            y0 = max(15, ymin_full - 5)
             for i, text in enumerate(lines):
                 y = y0 + i * 15
                 cv2.putText(
@@ -516,8 +569,8 @@ def main(VIDEO_PATH, OUTPUT_VIDEO_PATH):
                     text,
                     (x0, y),
                     font,
-                    0.45,         # font scale
-                    (0, 255, 0),  # green
+                    0.45,
+                    (0, 255, 0),
                     1,
                     cv2.LINE_AA,
                 )
@@ -546,6 +599,6 @@ def main(VIDEO_PATH, OUTPUT_VIDEO_PATH):
 
 
 if __name__ == "__main__":
-    VIDEO_PATH = "cars_on_track.mp4"
-    OUTPUT_VIDEO_PATH = "cars_on_track_overlay.mp4"
+    VIDEO_PATH = "Videos/cars_on_track.mp4"
+    OUTPUT_VIDEO_PATH = "Video Overlays/cars_on_track_overlay_from_scratch.mp4"
     main(VIDEO_PATH, OUTPUT_VIDEO_PATH)
