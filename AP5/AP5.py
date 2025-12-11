@@ -128,9 +128,8 @@ def make_unique_sorted_points(
         xs_unique = xs_sorted[unique_mask]
         ys_unique = ys_sorted[unique_mask]
 
-        # Optional downsampling to reduce number of control points
+        # Optional downsampling
         if max_points_per_band is not None and len(xs_unique) > max_points_per_band:
-            # pick approximately uniform indices along the band
             idx = np.linspace(0, len(xs_unique) - 1, max_points_per_band).astype(int)
             xs_unique = xs_unique[idx]
             ys_unique = ys_unique[idx]
@@ -171,7 +170,7 @@ def fit_cubic_splines(
     xs_uniques: list[np.ndarray],
     ys_uniques: list[np.ndarray],
     n_points: int = 500
-) -> tuple[list[int], list[np.ndarray], list[np.ndarray]]:
+) -> tuple[list[np.ndarray], list[np.ndarray]]:
     """
     Fit cubic interpolating splines y(x) for each band.
 
@@ -184,8 +183,7 @@ def fit_cubic_splines(
     y_fines: list[np.ndarray] = []
 
     for band_idx, xs_unique, ys_unique in zip(band_indices, xs_uniques, ys_uniques):
-        print(f"[Cubic] Band {band_idx}: {len(xs_unique)} unique (possibly downsampled) points")
-
+        print(f"[Cubic] Band {band_idx}: {len(xs_unique)} control points")
         spline = CubicSpline(xs_unique, ys_unique)
         x_fine = np.linspace(xs_unique.min(), xs_unique.max(), n_points)
         y_fine = spline(x_fine)
@@ -193,7 +191,7 @@ def fit_cubic_splines(
         x_fines.append(x_fine)
         y_fines.append(y_fine)
 
-    return band_indices, x_fines, y_fines
+    return x_fines, y_fines
 
 def fit_smoothing_splines(
     band_indices: list[int],
@@ -201,7 +199,7 @@ def fit_smoothing_splines(
     ys_uniques: list[np.ndarray],
     smoothing_factor: float,
     n_points: int = 500
-) -> tuple[list[int], list[np.ndarray], list[np.ndarray]]:
+) -> tuple[list[np.ndarray], list[np.ndarray]]:
     """
     Fit smoothing splines y(x) for each band.
 
@@ -213,8 +211,7 @@ def fit_smoothing_splines(
     y_fines: list[np.ndarray] = []
 
     for band_idx, xs_unique, ys_unique in zip(band_indices, xs_uniques, ys_uniques):
-        print(f"[Smooth] Band {band_idx}: {len(xs_unique)} unique (possibly downsampled) points")
-
+        print(f"[Smooth] Band {band_idx}: {len(xs_unique)} control points")
         spline = UnivariateSpline(xs_unique, ys_unique, s=smoothing_factor)
         x_fine = np.linspace(xs_unique.min(), xs_unique.max(), n_points)
         y_fine = spline(x_fine)
@@ -222,9 +219,103 @@ def fit_smoothing_splines(
         x_fines.append(x_fine)
         y_fines.append(y_fine)
 
-    return band_indices, x_fines, y_fines
+    return x_fines, y_fines
 
-# 4. Visualization helpers
+# 4. Metrics
+def compute_metrics_per_band(
+    band_indices: list[int],
+    xs_full: list[np.ndarray],
+    ys_full: list[np.ndarray],
+    xs_uniques: list[np.ndarray],
+    ys_uniques: list[np.ndarray],
+    smoothing_factor: float,
+    n_curv_points: int = 500
+) -> list[dict]:
+    """
+    For each band:
+      - rebuild cubic & smoothing splines from control points
+      - evaluate their error vs the full centerline
+      - estimate smoothness via mean squared second derivative
+    """
+    results: list[dict] = []
+
+    for band_idx, x_full, y_full, xs_u, ys_u in zip(
+        band_indices, xs_full, ys_full, xs_uniques, ys_uniques
+    ):
+        # Rebuild splines
+        cubic = CubicSpline(xs_u, ys_u)
+        smooth = UnivariateSpline(xs_u, ys_u, s=smoothing_factor)
+
+        # 1) Accuracy vs original dense centerline (at original integer xs)
+        y_cubic = cubic(x_full)
+        y_smooth = smooth(x_full)
+
+        mse_cubic = float(np.mean((y_cubic - y_full) ** 2))
+        mse_smooth = float(np.mean((y_smooth - y_full) ** 2))
+
+        # 2) Smoothness: mean squared second derivative as a curvature proxy
+        x_eval = np.linspace(xs_u.min(), xs_u.max(), n_curv_points)
+        d2_cubic = cubic.derivative(2)(x_eval)
+        d2_smooth = smooth.derivative(2)(x_eval)
+
+        curv2_cubic = float(np.mean(d2_cubic**2))
+        curv2_smooth = float(np.mean(d2_smooth**2))
+
+        results.append(
+            dict(
+                band=band_idx,
+                num_points_full=len(x_full),
+                num_points_control=len(xs_u),
+                mse_cubic=mse_cubic,
+                mse_smooth=mse_smooth,
+                curv2_cubic=curv2_cubic,
+                curv2_smooth=curv2_smooth,
+            )
+        )
+
+    return results
+
+
+def print_metrics_table(metrics: list[dict]) -> None:
+    """
+    Nicely print metrics per band and a simple average summary.
+    """
+    if not metrics:
+        print("No metrics to display.")
+        return
+
+    header = (
+        f"{'Band':>4} | {'FullPts':>7} | {'CtrlPts':>7} | "
+        f"{'MSE Cubic':>10} | {'MSE Smooth':>11} | "
+        f"{'Curv^2 Cubic':>12} | {'Curv^2 Smooth':>14}"
+    )
+    print(header)
+    print("-" * len(header))
+
+    for m in metrics:
+        print(
+            f"{m['band']:>4} | "
+            f"{m['num_points_full']:>7} | "
+            f"{m['num_points_control']:>7} | "
+            f"{m['mse_cubic']:>10.4f} | "
+            f"{m['mse_smooth']:>11.4f} | "
+            f"{m['curv2_cubic']:>12.4f} | "
+            f"{m['curv2_smooth']:>14.4f}"
+        )
+
+    # Simple averages across bands
+    avg_mse_cubic = np.mean([m["mse_cubic"] for m in metrics])
+    avg_mse_smooth = np.mean([m["mse_smooth"] for m in metrics])
+    avg_curv_cubic = np.mean([m["curv2_cubic"] for m in metrics])
+    avg_curv_smooth = np.mean([m["curv2_smooth"] for m in metrics])
+
+    print("\nAverages across bands:")
+    print(f"  MSE cubic      : {avg_mse_cubic:.4f}")
+    print(f"  MSE smooth     : {avg_mse_smooth:.4f}")
+    print(f"  Curv^2 cubic   : {avg_curv_cubic:.4f}")
+    print(f"  Curv^2 smooth  : {avg_curv_smooth:.4f}")
+
+# 5. Visualization
 def visualize_bands_points(
     kanji_image: np.ndarray,
     band_indices: list[int],
@@ -265,12 +356,12 @@ def compare_cubic_and_smoothing(
     """
     fig, axes = plt.subplots(1, 3, figsize=(18, 6))
 
-    # 1. Original kanji
+    # Original
     axes[0].imshow(kanji_image, cmap="gray")
     axes[0].set_title("Original Kanji")
     axes[0].axis("off")
 
-    # 2. Cubic interpolating splines
+    # Cubic
     axes[1].imshow(kanji_image, cmap="gray")
     for band_idx, x_fine, y_fine, xs_u, ys_u in zip(
         band_indices, cubic_x_fines, cubic_y_fines, xs_uniques, ys_uniques
@@ -281,7 +372,7 @@ def compare_cubic_and_smoothing(
     axes[1].set_title("Cubic Interpolating Splines")
     axes[1].axis("off")
 
-    # 3. Smoothing splines
+    # Smoothing
     axes[2].imshow(kanji_image, cmap="gray")
     for band_idx, x_fine, y_fine, xs_u, ys_u in zip(
         band_indices, smooth_x_fines, smooth_y_fines, xs_uniques, ys_uniques
@@ -295,7 +386,7 @@ def compare_cubic_and_smoothing(
     plt.tight_layout()
     plt.show()
 
-# 5. Main demo
+# 6. Main demo
 def process_kanji_image(
     image_path: str,
     sections: int = 10,
@@ -304,14 +395,15 @@ def process_kanji_image(
     max_points_per_band: int | None = 40
 ) -> None:
     """
-    End-to-end pipeline:
-      - load and binarize image
-      - extract centerline points per band
-      - downsample points per band (optional)
+    End-to-end:
+      - load & binarize
+      - extract centerline bands
+      - downsample control points
       - fit cubic and smoothing splines
-      - visualize results side-by-side
+      - visualize
+      - compute + print metrics
     """
-    # 1) Load and binarize
+    # Load and binarize
     kanji_image = load_grayscale_image(image_path)
     binary_image = binarize_image(kanji_image, threshold)
 
@@ -333,31 +425,35 @@ def process_kanji_image(
     plt.tight_layout()
     plt.show()
 
-    # 2) Centerline per band
+    # Centerline per band
     band_indices, xs_bands, ys_bands = separate_horizontal_bands(binary_image, sections)
     visualize_bands_points(kanji_image, band_indices, xs_bands, ys_bands)
 
-    # 3) Prepare unique sorted + downsampled points per band
+    # Unique + downsampled control points per band
     xs_uniques_all, ys_uniques_all = make_unique_sorted_points(
         xs_bands, ys_bands, max_points_per_band=max_points_per_band
     )
 
-    # 4) Filter bands that have enough points for splines
+    # Filter valid bands for spline fitting
     valid_band_indices, xs_uniques, ys_uniques = filter_valid_bands(
         band_indices, xs_uniques_all, ys_uniques_all, min_points=4
     )
 
-    # 5) Fit cubic splines on valid bands
-    cubic_band_indices, cubic_x_fines, cubic_y_fines = fit_cubic_splines(
+    # Original dense centerline per valid band (for metrics)
+    band_to_full = {idx: (xs, ys) for idx, xs, ys in zip(band_indices, xs_bands, ys_bands)}
+    xs_full_valid = [band_to_full[idx][0] for idx in valid_band_indices]
+    ys_full_valid = [band_to_full[idx][1] for idx in valid_band_indices]
+
+    # Fit splines
+    cubic_x_fines, cubic_y_fines = fit_cubic_splines(
         valid_band_indices, xs_uniques, ys_uniques
     )
-
-    # 6) Fit smoothing splines on valid bands
-    smooth_band_indices, smooth_x_fines, smooth_y_fines = fit_smoothing_splines(
+    
+    smooth_x_fines, smooth_y_fines = fit_smoothing_splines(
         valid_band_indices, xs_uniques, ys_uniques, smoothing_factor
     )
 
-    # 7) Compare visually
+    # Visual comparison
     compare_cubic_and_smoothing(
         kanji_image,
         valid_band_indices,
@@ -370,12 +466,24 @@ def process_kanji_image(
         smoothing_factor
     )
 
+    # Metrics
+    metrics = compute_metrics_per_band(
+        valid_band_indices,
+        xs_full_valid,
+        ys_full_valid,
+        xs_uniques,
+        ys_uniques,
+        smoothing_factor,
+        n_curv_points=500
+    )
+    print_metrics_table(metrics)
+
 if __name__ == "__main__":
-    IMAGE_PATH = "letters/house kanji.png"
+    IMAGE_PATH = "letters/man kanji.png"
     process_kanji_image(
         image_path=IMAGE_PATH,
-        sections=10,
+        sections=4,
         threshold=0.5,
-        smoothing_factor=200.0, # big s to see a difference
-        max_points_per_band=15  # fewer anchor points per band so that interpolation/smoothing happens
+        smoothing_factor=200.0,   # big s to see difference
+        max_points_per_band=25    # smaller = more interpolation, more smoothing effect
     )
