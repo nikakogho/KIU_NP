@@ -210,7 +210,7 @@ def main(input_path: str, output_path: str) -> None:
     # frame_detections[t] = list of {cx, cy, left, top, width, height}
     frame_detections: List[List[Dict[str, float]]] = []
 
-    # ---------- 1) First pass: detection + tracking ----------
+    #  1) First pass: detection + tracking 
     while True:
         ok, frame = cap.read()
         if not ok:
@@ -283,7 +283,7 @@ def main(input_path: str, output_path: str) -> None:
 
     print(f"Processed {T} frames.")
 
-    # ---------- 2) Filter short tracks ----------
+    #  2) Filter short tracks 
     tracks = [tr for tr in tracks if len(tr.frames) >= MIN_TRACK_LEN]
     print(f"Tracks with at least {MIN_TRACK_LEN} frames: {len(tracks)}")
 
@@ -291,13 +291,13 @@ def main(input_path: str, output_path: str) -> None:
         print("No valid tracks found. Try adjusting MIN_AREA, MAX_TRACK_DIST, or BG-subtractor settings.")
         return
 
-    # ---------- 3) Per-track motion ----------
+    #  3) Per-track motion 
     track_motions: Dict[int, Dict[str, Any]] = {}
     for tr in tracks:
         motion = compute_motion_for_track(tr, fps)
         track_motions[tr.id] = motion
 
-    # ---------- 4) Feature matrix + DBSCAN clustering ----------
+    #  4) Feature matrix + DBSCAN clustering 
     track_ids, X = build_track_feature_matrix(track_motions)
     if X.shape[0] > 0:
         cluster_labels = cluster_tracks_dbscan(X, eps=DBSCAN_EPS, min_samples=DBSCAN_MIN_SAMPLES)
@@ -308,7 +308,7 @@ def main(input_path: str, output_path: str) -> None:
         tid: int(lbl) for tid, lbl in zip(track_ids, cluster_labels)
     }
 
-    # ---------- 5) Build per-frame overlay info (with bounding boxes) ----------
+    #  5) Build per-frame overlay info (with bounding boxes) 
     per_frame_info: List[List[Dict[str, Any]]] = [[] for _ in range(T)]
 
     for tr in tracks:
@@ -366,7 +366,7 @@ def main(input_path: str, output_path: str) -> None:
     scale_x = width_full / float(small_w)
     scale_y = height_full / float(small_h)
 
-    # ---------- 6) Second pass: overlay + write video ----------
+    #  6) Second pass: overlay + write video 
     print("Writing overlay video...")
     cap = cv2.VideoCapture(input_path)
     if not cap.isOpened():
@@ -435,7 +435,7 @@ def main(input_path: str, output_path: str) -> None:
     out.release()
     print(f"Overlay video written to: {output_path}")
 
-    # ---------- 7) Console summary ----------
+    #  7) Console summary 
     print("\nPer-track motion summaries (pixel units):")
     for tr in tracks:
         tid = tr.id

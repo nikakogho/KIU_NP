@@ -18,9 +18,9 @@ from collections import deque
 from dataclasses import dataclass
 
 
-# =========================
+
 #   CONFIGURABLE HELPERS
-# =========================
+
 
 def frame_to_gray_small(frame_bgr: np.ndarray, downscale: int) -> np.ndarray:
     """
@@ -61,9 +61,9 @@ def foreground_mask(frame_small: np.ndarray, bg_small: np.ndarray, thresh: float
     return mask
 
 
-# =========================
+
 #   MORPHOLOGY (3x3)
-# =========================
+
 
 def dilate3x3(mask: np.ndarray) -> np.ndarray:
     mask_bool = mask.astype(bool)
@@ -107,9 +107,9 @@ def open_close(mask: np.ndarray) -> np.ndarray:
     return closed
 
 
-# =========================
+
 #   CONNECTED COMPONENTS
-# =========================
+
 
 def connected_components(mask: np.ndarray, min_area: int = 30):
     """
@@ -182,9 +182,9 @@ def connected_components(mask: np.ndarray, min_area: int = 30):
     return components
 
 
-# =========================
+
 #   TRACKING
-# =========================
+
 
 @dataclass
 class Track:
@@ -243,9 +243,9 @@ def update_tracks(tracks, detections, frame_idx, max_distance, next_track_id):
     return tracks, next_track_id
 
 
-# =========================
+
 #   DERIVATIVES
-# =========================
+
 
 def central_diff_irregular(x: np.ndarray, t: np.ndarray) -> np.ndarray:
     """
@@ -345,9 +345,9 @@ def compute_motion_for_track(track: Track, fps: float):
     }
 
 
-# =========================
+
 #   FEATURE MATRIX (for clustering if needed)
-# =========================
+
 
 def build_track_feature_matrix(track_motions: dict):
     """
@@ -373,9 +373,9 @@ def build_track_feature_matrix(track_motions: dict):
     return track_ids, X
 
 
-# =========================
+
 #   MAIN PIPELINE
-# =========================
+
 
 def main(VIDEO_PATH, OUTPUT_VIDEO_PATH):
     # ---------- CONFIG ----------
