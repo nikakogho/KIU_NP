@@ -121,12 +121,7 @@ plt.title(f"Centerline points with {sections} vertical bands")
 plt.axis("off")
 plt.show()
 
-from scipy.interpolate import CubicSpline
-
-def calculate_cubic_splines(xs_bands: list[np.ndarray], ys_bands: list[np.ndarray]) -> tuple[list[int], list[np.ndarray], list[np.ndarray], list[np.ndarray], list[np.ndarray]]:
-    band_indexes = []
-    x_fines = []
-    y_fines = []
+def get_unique_band_points(xs_bands: list[np.ndarray], ys_bands: list[np.ndarray]) -> tuple[list[np.ndarray], list[np.ndarray]]:
     xs_uniques = []
     ys_uniques = []
 
@@ -134,6 +129,33 @@ def calculate_cubic_splines(xs_bands: list[np.ndarray], ys_bands: list[np.ndarra
         xs_band = xs_bands[band_idx]
         ys_band = ys_bands[band_idx]
 
+        # 1) SORT POINTS BY x
+        order = np.argsort(xs_band)
+        xs_sorted = xs_band[order]
+        ys_sorted = ys_band[order]
+
+        # Remove duplicate x values
+        unique_mask = np.diff(xs_sorted, prepend=xs_sorted[0] - 1) != 0
+        xs_unique = xs_sorted[unique_mask]
+        ys_unique = ys_sorted[unique_mask]
+
+        print("Unique xs:", len(xs_unique))
+
+        xs_uniques.append(xs_unique)
+        ys_uniques.append(ys_unique)
+
+    return xs_uniques, ys_uniques
+
+xs_uniques, ys_uniques = get_unique_band_points(xs_bands, ys_bands)
+
+from scipy.interpolate import CubicSpline
+
+def calculate_cubic_splines(xs_uniques: list[np.ndarray], ys_uniques: list[np.ndarray]) -> tuple[list[int], list[np.ndarray], list[np.ndarray]]:
+    band_indexes = []
+    x_fines = []
+    y_fines = []
+
+    for band_idx in range(sections):
         print(f"Using band {band_idx} with {len(xs_band)} points.")
 
         # Safety check: skip if band has too few points
@@ -141,18 +163,8 @@ def calculate_cubic_splines(xs_bands: list[np.ndarray], ys_bands: list[np.ndarra
             print("Not enough points in this band for a cubic spline; ignoring this band_idx.")
             continue
 
-        # 1) SORT POINTS BY x
-        # CubicSpline expects x to be strictly increasing
-        order = np.argsort(xs_band)
-        xs_sorted = xs_band[order]
-        ys_sorted = ys_band[order]
-
-        # Remove duplicate x values (can happen if two columns gave the same mean y)
-        unique_mask = np.diff(xs_sorted, prepend=xs_sorted[0] - 1) != 0
-        xs_unique = xs_sorted[unique_mask]
-        ys_unique = ys_sorted[unique_mask]
-
-        print("Unique xs:", len(xs_unique))
+        xs_unique = xs_uniques[band_idx]
+        ys_unique = ys_uniques[band_idx]
 
         # 2) FIT CUBIC INTERPOLATING SPLINE y(x)
         spline = CubicSpline(xs_unique, ys_unique)
@@ -163,13 +175,11 @@ def calculate_cubic_splines(xs_bands: list[np.ndarray], ys_bands: list[np.ndarra
 
         x_fines.append(x_fine)
         y_fines.append(y_fine)
-        xs_uniques.append(xs_unique)
-        ys_uniques.append(ys_unique)
         band_indexes.append(band_idx)
 
-    return band_indexes, x_fines, y_fines, xs_uniques, ys_uniques
+    return band_indexes, x_fines, y_fines
 
-band_indexes, x_fines, y_fines, xs_uniques, ys_uniques = calculate_cubic_splines(xs_bands, ys_bands)
+band_indexes, x_fines, y_fines = calculate_cubic_splines(xs_bands, ys_bands)
 
 def visualize_splines(kanji_image: np.ndarray, band_indexes: list[int], x_fines: list[np.ndarray], y_fines: list[np.ndarray], xs_uniques: list[np.ndarray], ys_uniques: list[np.ndarray]) -> None:
     """
