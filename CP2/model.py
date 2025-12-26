@@ -194,6 +194,37 @@ def f(t, y, p):
         dy[IDX[name]] = pipe_rhs(mdot_B, T_up, T_seg)
         T_up = T_seg
 
+    # Mixing at radiator inlet (merge of return branches)
+    
+    T_ret_A5 = y[IDX["T_ret_A5"]]
+    T_ret_B5 = y[IDX["T_ret_B5"]]
+
+    mdot_tot = mdot_A + mdot_B
+    if mdot_tot <= 0:
+        raise ValueError("Total mass flow must be positive.")
+
+    T_mix = (mdot_A * T_ret_A5 + mdot_B * T_ret_B5) / mdot_tot
+
+    ## Radiator coolant manifold (well-mixed)
+    T_cR = y[IDX["T_cR"]]
+    T_r = y[IDX["T_r"]]
+    cp = p["cp"]
+
+    # m_cR * cp * dT_cR/dt = mdot_tot*cp*(T_mix - T_cR) + UA_r*(T_r - T_cR)
+    dy[IDX["T_cR"]] = (
+        mdot_tot * cp * (T_mix - T_cR)
+        + p["UA_r"] * (T_r - T_cR)
+    ) / (p["m_cR"] * cp)
+
+    ## Radiator panel (solid) with radiation + optional solar
+    
+    # C_r * dT_r/dt = UA_r*(T_cR - T_r) - eps_r*sigma*A_r*(T_r^4 - T_bg^4) + alpha_r*A_r*G_sun*s_r
+    dy[IDX["T_r"]] = (
+        p["UA_r"] * (T_cR - T_r)
+        - p["eps_r"] * p["sigma"] * p["A_r"] * (T_r**4 - p["T_bg"]**4)
+        + p["alpha_r"] * p["A_r"] * p["G_sun"] * p["s_r"]
+    ) / p["C_r"]
+
     return dy
 
 def sanity_check_finite_and_signs():
@@ -251,6 +282,23 @@ def sanity_check_finite_and_signs():
     assert dy[IDX["T_ret_A1"]] > 0.0
     assert dy[IDX["T_ret_B1"]] > 0.0
 
+    # radiator radiation should cool when hot (if solar is off)
+    p["s_r"] = 0.0  # no solar
+    y = np.zeros(N_STATE)
+
+    # Make radiator very hot vs background; coolant cooler.
+    y[IDX["T_r"]] = 600.0
+    y[IDX["T_cR"]] = 300.0
+
+    # Provide reasonable values for the merge inputs so T_mix is defined
+    y[IDX["T_ret_A5"]] = 310.0
+    y[IDX["T_ret_B5"]] = 310.0
+
+    dy = f(0.0, y, p)
+    assert np.isfinite(dy[IDX["T_r"]])
+    assert dy[IDX["T_r"]] < 0.0, "Expected hot radiator to cool via radiation when solar=0."
+
+    print("Radiator radiation sanity passed.")
     print("Sanity check passed.")
 
 if __name__ == "__main__":
