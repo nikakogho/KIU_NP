@@ -145,6 +145,55 @@ def f(t, y, p):
         + mdot_B * cp * (T_sup_B5 - T_cB)
     ) / (p["m_cB"] * cp)
 
+    # Pipe segments (transport + environment exchange)
+
+    m_p = p["m_p"]     # kg per segment
+    cp = p["cp"]       # J/(kg*K)
+
+    def pipe_rhs(mdot_i, T_up, T_seg):
+        # m_p * cp * dT/dt = mdot_i * cp * (T_up - T_seg) + Q_pipe(T_seg)
+        dT_dt = (mdot_i * cp * (T_up - T_seg) + Q_pipe(T_seg, p)) / (m_p * cp)
+        return dT_dt
+
+    ## Supply pipes: radiator -> server
+    # Upstream for first supply segment is radiator manifold coolant temperature.
+    # We haven't implemented T_cR dynamics yet, but it exists in state and can be used as boundary.
+    T_cR = y[IDX["T_cR"]]
+
+    # Branch A supply
+    T_up = T_cR
+    for j in range(1, 6):
+        name = f"T_sup_A{j}"
+        T_seg = y[IDX[name]]
+        dy[IDX[name]] = pipe_rhs(mdot_A, T_up, T_seg)
+        T_up = T_seg  # next segment sees this as upstream
+
+    # Branch B supply
+    T_up = T_cR
+    for j in range(1, 6):
+        name = f"T_sup_B{j}"
+        T_seg = y[IDX[name]]
+        dy[IDX[name]] = pipe_rhs(mdot_B, T_up, T_seg)
+        T_up = T_seg
+
+    ## Return pipes: server -> radiator
+    # Upstream for first return segment is cold plate coolant temperature.
+    # Branch A return
+    T_up = T_cA
+    for j in range(1, 6):
+        name = f"T_ret_A{j}"
+        T_seg = y[IDX[name]]
+        dy[IDX[name]] = pipe_rhs(mdot_A, T_up, T_seg)
+        T_up = T_seg
+
+    # Branch B return
+    T_up = T_cB
+    for j in range(1, 6):
+        name = f"T_ret_B{j}"
+        T_seg = y[IDX[name]]
+        dy[IDX[name]] = pipe_rhs(mdot_B, T_up, T_seg)
+        T_up = T_seg
+
     return dy
 
 def sanity_check_finite_and_signs():
@@ -174,6 +223,33 @@ def sanity_check_finite_and_signs():
     # Check expected directions
     assert dy[IDX["T_cA"]] > 0.0, "Expected coolant A to warm when T_sA > T_cA."
     assert dy[IDX["T_cB"]] > 0.0, "Expected coolant B to warm when T_sB > T_cB."
+
+    # turn off pipe radiation/solar for this test (pure advection)
+    p["alpha_p"] = 0.0
+    p["eps_p"] = 0.0
+    p["s_p"] = 0.0
+
+    # set a clear upstream boundary:
+    y[IDX["T_cR"]] = 280.0      # supply boundary
+    y[IDX["T_cA"]] = 320.0      # return boundary A
+    y[IDX["T_cB"]] = 310.0      # return boundary B
+
+    # initialize pipes away from upstream so we can see direction
+    for j in range(1, 6):
+        y[IDX[f"T_sup_A{j}"]] = 400.0
+        y[IDX[f"T_sup_B{j}"]] = 400.0
+        y[IDX[f"T_ret_A{j}"]] = 200.0
+        y[IDX[f"T_ret_B{j}"]] = 200.0
+
+    dy = f(0.0, y, p)
+
+    # Expect supply segments (at 400) to move DOWN toward upstream 280 -> dy negative
+    assert dy[IDX["T_sup_A1"]] < 0.0
+    assert dy[IDX["T_sup_B1"]] < 0.0
+
+    # Expect return segments (at 200) to move UP toward upstream ~310/320 -> dy positive
+    assert dy[IDX["T_ret_A1"]] > 0.0
+    assert dy[IDX["T_ret_B1"]] > 0.0
 
     print("Sanity check passed.")
 
