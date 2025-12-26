@@ -116,26 +116,66 @@ def f(t, y, p):
     # dy[IDX["T_cA"]] = ...
     # ...
 
-    # Branch A
+    # Server Solid Temperatures
+    ## Branch A
     T_sA = y[IDX["T_sA"]]
     T_cA = y[IDX["T_cA"]]
     dy[IDX["T_sA"]] = (P_A(t) - p["UA_sA"] * (T_sA - T_cA)) / p["C_sA"]
 
-    # Branch B
+    ## Branch B
     T_sB = y[IDX["T_sB"]]
     T_cB = y[IDX["T_cB"]]
     dy[IDX["T_sB"]] = (P_B(t) - p["UA_sB"] * (T_sB - T_cB)) / p["C_sB"]
 
+    # Cold-Plate Coolant Temperatures
+
+    cp = p["cp"]
+
+    ## Branch A Coolant
+    T_sup_A5 = y[IDX["T_sup_A5"]]  # inlet to cold plate A (placeholder until pipes exist)
+    dy[IDX["T_cA"]] = (
+        p["UA_sA"] * (T_sA - T_cA)
+        + mdot_A * cp * (T_sup_A5 - T_cA)
+    ) / (p["m_cA"] * cp)
+
+    ## Branch B Coolant
+    T_sup_B5 = y[IDX["T_sup_B5"]]  # inlet to cold plate B (placeholder until pipes exist)
+    dy[IDX["T_cB"]] = (
+        p["UA_sB"] * (T_sB - T_cB)
+        + mdot_B * cp * (T_sup_B5 - T_cB)
+    ) / (p["m_cB"] * cp)
+
     return dy
 
-# 6) Quick self-test: shape + indices
-if __name__ == "__main__":
+def sanity_check_finite_and_signs():
+    """
+    Quick sanity check for early stages:
+    - derivatives should be finite
+    - if T_s > T_c and no inlet is hotter than coolant, then:
+        dT_s/dt should be smaller than P/C (cooling exists)
+        dT_c/dt should be positive (coolant heating up)
+    """
     p = default_params()
-    y0 = np.zeros(N_STATE, dtype=float)
 
-    print("N_STATE =", N_STATE)
-    print("First 8 state names:", STATE_NAMES[:8])
-    print("Index of T_ret_B5:", IDX["T_ret_B5"])
+    y = np.zeros(N_STATE)
+    # Set some plausible temps
+    y[IDX["T_sA"]] = 320.0
+    y[IDX["T_cA"]] = 300.0
+    y[IDX["T_sup_A5"]] = 290.0  # colder inlet
 
-    dy0 = f(0.0, y0, p)
-    print("dy0 shape:", dy0.shape)
+    y[IDX["T_sB"]] = 320.0
+    y[IDX["T_cB"]] = 300.0
+    y[IDX["T_sup_B5"]] = 290.0
+
+    dy = f(0.0, y, p)
+
+    assert np.all(np.isfinite(dy)), "Non-finite derivatives detected (NaN/Inf)."
+
+    # Check expected directions
+    assert dy[IDX["T_cA"]] > 0.0, "Expected coolant A to warm when T_sA > T_cA."
+    assert dy[IDX["T_cB"]] > 0.0, "Expected coolant B to warm when T_sB > T_cB."
+
+    print("Sanity check passed.")
+
+if __name__ == "__main__":
+    sanity_check_finite_and_signs()
