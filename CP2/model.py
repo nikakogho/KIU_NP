@@ -56,9 +56,9 @@ def default_params():
         "C_r":  5e5,     # J/K
 
         # Heat transfer UA values
-        "UA_sA": 2e4,    # W/K
-        "UA_sB": 2e4,    # W/K
-        "UA_r":  3e4,    # W/K
+        "UA_sA": 2e4,    # W/K heat transfer between solid and fluid in branch A
+        "UA_sB": 2e4,    # W/K heat transfer between solid and fluid in branch B
+        "UA_r":  3e4,    # W/K heat transfer between radiator solid and fluid
 
         # Radiation + solar
         "sigma": 5.670374419e-8,  # W/m^2/K^4
@@ -70,7 +70,7 @@ def default_params():
 
         "eps_p": 0.7,
         "alpha_p": 0.2,
-        "A_p":  1.0,              # m^2 (per pipe segment)
+        "A_p":  1.0,              # m^2 (pipe surface area)
         "s_r":  0.0,              # radiator sun exposure factor
         "s_p":  0.0,              # pipe sun exposure factor
     }
@@ -115,6 +115,16 @@ def f(t, y, p):
     # dy[IDX["T_sA"]] = ...
     # dy[IDX["T_cA"]] = ...
     # ...
+
+    # Branch A
+    T_sA = y[IDX["T_sA"]]
+    T_cA = y[IDX["T_cA"]]
+    dy[IDX["T_sA"]] = (P_A(t) - p["UA_sA"] * (T_sA - T_cA)) / p["C_sA"]
+
+    # Branch B
+    T_sB = y[IDX["T_sB"]]
+    T_cB = y[IDX["T_cB"]]
+    dy[IDX["T_sB"]] = (P_B(t) - p["UA_sB"] * (T_sB - T_cB)) / p["C_sB"]
 
     return dy
 
