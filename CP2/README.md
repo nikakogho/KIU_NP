@@ -197,3 +197,13 @@ g(y) = y - y_n - dt * f(t_{n+1}, y) = 0
 ## Results
 In a simple straightforward run we see that Newton-Gauss-Seidel method is far more efficient, taking 6 iterations instead of 76
 ![Fixed Point vs Newton-Gauss-Seidel](images/fixed_point_vs_ngs.png)
+
+We can watch it change over time:
+
+![alt text](images/image-3.png)
+
+![alt text](images/image-1.png)
+
+![alt text](images/image-2.png)
+
+![alt text](images/image.png)

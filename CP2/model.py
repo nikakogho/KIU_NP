@@ -34,45 +34,73 @@ N_STATE = len(STATE_NAMES)
 # 2) Parameters container
 
 def default_params():
-    """
-    Keep all constants in one place (makes experiments reproducible).
-    Values are placeholders for now; we'll set realistic numbers later.
-    """
+    import numpy as np
+
+    # ---- Geometry assumptions (Option 2: 200 m per branch) ----
+    rho = 1000.0      # kg/m^3 (water-ish)
+    D   = 0.10        # m pipe inner diameter
+    L_branch = 200.0  # m total (supply+return) per branch
+    N_seg_total = 10  # 5 supply + 5 return
+    dx = L_branch / N_seg_total
+
+    A_cross = np.pi * (D/2)**2          # m^2
+    V_seg   = A_cross * dx              # m^3
+    m_p     = rho * V_seg               # kg per segment
+
+    A_p_seg = np.pi * D * dx            # m^2 exposed surface per segment (for radiation/solar)
+
+    # ---- Thermal / operating assumptions ----
+    cp = 4180.0  # J/(kg*K)
+
+    # 1 MW per branch with ~10K coolant rise => ~24 kg/s per branch
+    mdot_total = 48.0
+
+    # Radiator sizing: pick area so it can reject ~2 MW at a moderate temperature (~320–340K)
+    A_r = 5000.0
+
     return {
         # Flow split
-        "mdot": 1.0,     # kg/s
-        "phi": 0.5,      # fraction to branch A
+        "mdot": mdot_total,
+        "phi": 0.5,
 
         # Fluid properties
-        "cp": 4000.0,    # J/(kg*K) placeholder (we'll revise)
-        "m_p": 1.0,      # kg  (fluid mass per pipe segment)
-        "m_cA": 1.0,     # kg  (fluid mass in cold plate A)
-        "m_cB": 1.0,     # kg  (fluid mass in cold plate B)
-        "m_cR": 1.0,     # kg  (fluid mass in radiator manifold)
+        "cp": cp,
+        "m_p": float(m_p),      # <- now geometry-based (~157 kg)
+        "m_cA": 10.0,           # kg cold plate control volume (≈10 liters)
+        "m_cB": 10.0,
+        "m_cR": 200.0,          # kg manifold volume (bigger = smoother mixing)
 
         # Thermal capacitances (solids)
-        "C_sA": 1e5,     # J/K
-        "C_sB": 1e5,     # J/K
-        "C_r":  5e5,     # J/K
+        "C_sA": 2.0e6,          # J/K (GPU module effective thermal mass)
+        "C_sB": 2.0e6,
+        "C_r":  2.0e6,          # J/K (panel warms noticeably on ~1000s timescale)
 
         # Heat transfer UA values
-        "UA_sA": 2e4,    # W/K heat transfer between solid and fluid in branch A
-        "UA_sB": 2e4,    # W/K heat transfer between solid and fluid in branch B
-        "UA_r":  3e4,    # W/K heat transfer between radiator solid and fluid
+        "UA_sA": 2.0e5,         # W/K (strong cold-plate coupling)
+        "UA_sB": 2.0e5,
+        "UA_r":  2.0e5,         # W/K (manifold-to-panel coupling)
 
         # Radiation + solar
-        "sigma": 5.670374419e-8,  # W/m^2/K^4
-        "G_sun": 1361.6,          # W/m^2
-        "T_bg":  3.0,             # K (background)
-        "eps_r": 0.9,
-        "alpha_r": 0.15,
-        "A_r":  100.0,            # m^2
+        "sigma": 5.670374419e-8,
+        "G_sun": 1361.6,
+        "T_bg":  3.0,
 
-        "eps_p": 0.7,
-        "alpha_p": 0.2,
-        "A_p":  1.0,              # m^2 (pipe surface area)
-        "s_r":  0.0,              # radiator sun exposure factor
-        "s_p":  0.0,              # pipe sun exposure factor
+        "eps_r": 0.90,
+        "alpha_r": 0.15,
+        "A_r": A_r,
+
+        "eps_p": 0.70,
+        "alpha_p": 0.20,
+        "A_p": float(A_p_seg),  # <- now geometry-based (~6.28 m^2 per segment)
+
+        # Sun exposure factors (keep OFF for solver comparison runs)
+        "s_r": 0.0,
+        "s_p": 0.0,
+
+        # (Optional: store geometry for debugging/printing)
+        "D": D,
+        "dx": dx,
+        "L_branch": L_branch,
     }
 
 
