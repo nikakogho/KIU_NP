@@ -260,64 +260,6 @@ def f(t, y, p):
 
     return dy
 
-def df_diag(t, y, p):
-    """
-    Returns array dfi/dyi (diagonal of Jacobian of f wrt y).
-    This is enough for Newton–Gauss–Seidel diagonal updates.
-    """
-    cp = p["cp"]
-    mdot = p["mdot"]
-    phi = p["phi"]
-    mdot_A = phi * mdot
-    mdot_B = (1.0 - phi) * mdot
-    m_p = p["m_p"]
-
-    d = np.zeros_like(y, dtype=float)
-
-    # --- Servers ---
-    # f_sA = (P - UA*(TsA - TcA))/CsA => df/dTsA = -UA/CsA
-    d[IDX["T_sA"]] = -p["UA_sA"] / p["C_sA"]
-    d[IDX["T_sB"]] = -p["UA_sB"] / p["C_sB"]
-
-    # --- Cold plates ---
-    # f_TcA = [UA*(TsA-TcA) + mdotA*cp*(TsupA5 - TcA)] / (m_cA*cp)
-    # df/dTcA = [ -UA - mdotA*cp ] / (m_cA*cp)
-    d[IDX["T_cA"]] = (-p["UA_sA"] - mdot_A * cp) / (p["m_cA"] * cp)
-    d[IDX["T_cB"]] = (-p["UA_sB"] - mdot_B * cp) / (p["m_cB"] * cp)
-
-    # --- Pipes ---
-    # f = (mdot_i*cp*(Tup - T) + Q_pipe(T)) / (m_p*cp)
-    # df/dT = ( -mdot_i*cp + dQ/dT ) / (m_p*cp)
-    # dQ/dT = -eps*sigma*A * 4*T^3   (solar term has no T)
-    def dQdT(T):
-        # clamp like Q_pipe to stay safe
-        T = max(1.0, min(float(T), 2000.0))
-        return -p["eps_p"] * p["sigma"] * p["A_p"] * (4.0 * T**3)
-
-    def pipe_diag(mdot_i, T):
-        return (-mdot_i * cp + dQdT(T)) / (m_p * cp)
-
-    # supply/return segments
-    for j in range(1, 6):
-        d[IDX[f"T_sup_A{j}"]] = pipe_diag(mdot_A, y[IDX[f"T_sup_A{j}"]])
-        d[IDX[f"T_ret_A{j}"]] = pipe_diag(mdot_A, y[IDX[f"T_ret_A{j}"]])
-        d[IDX[f"T_sup_B{j}"]] = pipe_diag(mdot_B, y[IDX[f"T_sup_B{j}"]])
-        d[IDX[f"T_ret_B{j}"]] = pipe_diag(mdot_B, y[IDX[f"T_ret_B{j}"]])
-
-    # --- Radiator coolant manifold ---
-    # f_TcR = [ mdot*cp*(Tmix - TcR) + UA_r*(Tr - TcR) ] / (m_cR*cp)
-    # df/dTcR = [ -mdot*cp - UA_r ] / (m_cR*cp)
-    mdot_tot = mdot_A + mdot_B
-    d[IDX["T_cR"]] = (-mdot_tot * cp - p["UA_r"]) / (p["m_cR"] * cp)
-
-    # --- Radiator panel ---
-    # f_Tr = [ UA_r*(TcR - Tr) - eps*sigma*A*(Tr^4 - Tbg^4) + alpha*A*G*s_r ] / C_r
-    # df/dTr = [ -UA_r - eps*sigma*A*4*Tr^3 ] / C_r
-    Tr = max(1.0, min(float(y[IDX["T_r"]]), 2000.0))
-    d[IDX["T_r"]] = (-p["UA_r"] - p["eps_r"] * p["sigma"] * p["A_r"] * (4.0 * Tr**3)) / p["C_r"]
-
-    return d
-
 def sanity_check_finite_and_signs():
     """
     Quick sanity check for early stages:
