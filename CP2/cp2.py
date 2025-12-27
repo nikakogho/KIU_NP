@@ -361,7 +361,7 @@ def animate_compare(
     stride=5,
     interval_ms=60,
     scale_exclude_servers=True,
-    suptitle="FP vs Newton–GS (Implicit Euler)"
+    suptitle="FP vs Damped Newton (finite-difference dense Jacobian)"
 ):
     if scale_exclude_servers:
         scale_names = [n for n in pos.keys() if n not in ("T_sA", "T_sB")]
@@ -388,7 +388,7 @@ def animate_compare(
     fig.suptitle(suptitle, fontsize=16)
 
     update_fp = build_network_renderer(axs[0], pos, edges, norm, title_text="Fixed-Point")
-    update_ngs = build_network_renderer(axs[1], pos, edges, norm, title_text="Newton–GS")
+    update_ngs = build_network_renderer(axs[1], pos, edges, norm, title_text="Damped Newton")
 
     for ax in axs:
         for coll in ax.collections:
@@ -418,7 +418,7 @@ def animate_compare(
         y_ngs, ngs_div = safe_row(Y_ngs, i)
 
         update_fp(y_fp, title_override=f"Fixed-Point | t={t[i]:.1f}s", diverged=fp_div)
-        update_ngs(y_ngs, title_override=f"Newton–GS | t={t[i]:.1f}s", diverged=ngs_div)
+        update_ngs(y_ngs, title_override=f"Damped Newton | t={t[i]:.1f}s", diverged=ngs_div)
         return []
 
     anim = FuncAnimation(
@@ -502,7 +502,7 @@ def run_comparison_suite(
 
     idx_use = _select_state_indices(exclude_servers=exclude_servers)
 
-    print(f"\n[Reference] NGS with dt_ref={dt_ref}, tf={tf} ...")
+    print(f"\n[Reference] DN with dt_ref={dt_ref}, tf={tf} ...")
     t_start = time.perf_counter()
     t_ref, Y_ref, st_ref = simulate("ngs", y0, t0=t0, tf=tf, dt=dt_ref, p=p)
     ref_time = time.perf_counter() - t_start
@@ -580,7 +580,7 @@ def run_comparison_suite(
     if make_plots:
         plt.figure(figsize=(8, 5))
         plot_with_divergence_markers(x_fp, err_fp_plot, div_fp, label="Fixed-Point")
-        plot_with_divergence_markers(x_ngs, err_ngs_plot, div_ngs, label="Newton–GS")
+        plot_with_divergence_markers(x_ngs, err_ngs_plot, div_ngs, label="Damped Newton")
         plt.xlabel("dt (s)")
         plt.ylabel("Max RMS error vs reference (K)")
         plt.title("Accuracy vs timestep (divergence-aware)")
@@ -591,7 +591,7 @@ def run_comparison_suite(
 
         plt.figure(figsize=(8, 5))
         plot_with_divergence_markers(x_fp, it_fp_plot, div_fp, label="Fixed-Point")
-        plot_with_divergence_markers(x_ngs, it_ngs_plot, div_ngs, label="Newton–GS")
+        plot_with_divergence_markers(x_ngs, it_ngs_plot, div_ngs, label="Damped Newton")
         plt.xlabel("dt (s)")
         plt.ylabel("Average iterations / sweeps per step")
         plt.title("Work per step vs timestep (divergence-aware)")
@@ -602,11 +602,11 @@ def run_comparison_suite(
 
         plt.figure(figsize=(8, 5))
         plt.plot(x_fp, ok_fp, marker="o", label="Fixed-Point")
-        plt.plot(x_ngs, ok_ngs, marker="o", label="Newton–GS")
+        plt.plot(x_ngs, ok_ngs, marker="o", label="Damped Newton")
         if np.any(div_fp):
             plt.scatter(x_fp[div_fp], np.full(np.sum(div_fp), 1.02), marker="x", s=100, label="FP diverged", zorder=10)
         if np.any(div_ngs):
-            plt.scatter(x_ngs[div_ngs], np.full(np.sum(div_ngs), 1.02), marker="x", s=100, label="NGS diverged", zorder=10)
+            plt.scatter(x_ngs[div_ngs], np.full(np.sum(div_ngs), 1.02), marker="x", s=100, label="DN diverged", zorder=10)
         plt.xlabel("dt (s)")
         plt.ylabel("ok.mean() (fraction converged steps)")
         plt.title("Robustness vs timestep (divergence-aware)")
@@ -617,11 +617,11 @@ def run_comparison_suite(
 
         plt.figure(figsize=(8, 5))
         plt.plot(x_fp, rt_fp, marker="o", label="Fixed-Point")
-        plt.plot(x_ngs, rt_ngs, marker="o", label="Newton–GS")
+        plt.plot(x_ngs, rt_ngs, marker="o", label="Damped Newton")
         if np.any(div_fp):
             plt.scatter(x_fp[div_fp], rt_fp[div_fp], marker="x", s=100, label="FP diverged", zorder=10)
         if np.any(div_ngs):
-            plt.scatter(x_ngs[div_ngs], rt_ngs[div_ngs], marker="x", s=100, label="NGS diverged", zorder=10)
+            plt.scatter(x_ngs[div_ngs], rt_ngs[div_ngs], marker="x", s=100, label="DN diverged", zorder=10)
         plt.xlabel("dt (s)")
         plt.ylabel("Runtime (seconds)")
         plt.title("Runtime vs timestep (divergence-aware)")
@@ -659,14 +659,14 @@ if __name__ == "__main__":
     t_ngs, Y_ngs, st_ngs = simulate("ngs", y0, t0=t0, tf=tf, dt=dt, p=p)
 
     print(f"FP:  ok.mean()={st_fp['ok'].mean():.3f}  avg iters={st_fp['iters'].mean():.2f}")
-    print(f"NGS: ok.mean()={st_ngs['ok'].mean():.3f}  avg iters={st_ngs['iters'].mean():.2f}")
+    print(f"DN: ok.mean()={st_ngs['ok'].mean():.3f}  avg iters={st_ngs['iters'].mean():.2f}")
 
     pos, edges = make_layout()
     animate_compare(
         t_ngs, Y_fp, Y_ngs, pos, edges,
         stride=2,
         interval_ms=60,
-        suptitle=f"FP vs Newton–GS (Implicit Euler), dt={dt:.1f}s"
+        suptitle=f"FP vs Damped Newton, dt={dt:.1f}s"
     )
 
     run_comparison_suite(
