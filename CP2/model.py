@@ -103,6 +103,11 @@ def f(t, y, p):
     Returns dy/dt as a numpy array of shape (N_STATE,).
     This will be filled in step-by-step.
     """
+    if p["cp"] <= 0 or p["m_p"] <= 0 or p["m_cA"] <= 0 or p["m_cB"] <= 0 or p["m_cR"] <= 0:
+        raise ValueError("Masses and cp must be positive.")
+    if p["C_sA"] <= 0 or p["C_sB"] <= 0 or p["C_r"] <= 0:
+        raise ValueError("Thermal capacitances must be positive.")
+
     dy = np.zeros_like(y, dtype=float)
 
     # Unpack flow split
@@ -110,11 +115,6 @@ def f(t, y, p):
     phi = p["phi"]
     mdot_A = phi * mdot
     mdot_B = (1.0 - phi) * mdot
-
-    # For now, do nothing (stub). We'll fill equations next step.
-    # dy[IDX["T_sA"]] = ...
-    # dy[IDX["T_cA"]] = ...
-    # ...
 
     # Server Solid Temperatures
     ## Branch A
@@ -129,7 +129,7 @@ def f(t, y, p):
 
     # Cold-Plate Coolant Temperatures
 
-    cp = p["cp"]
+    cp = p["cp"] # J/(kg*K)
 
     ## Branch A Coolant
     T_sup_A5 = y[IDX["T_sup_A5"]]  # inlet to cold plate A (placeholder until pipes exist)
@@ -148,7 +148,6 @@ def f(t, y, p):
     # Pipe segments (transport + environment exchange)
 
     m_p = p["m_p"]     # kg per segment
-    cp = p["cp"]       # J/(kg*K)
 
     def pipe_rhs(mdot_i, T_up, T_seg):
         # m_p * cp * dT/dt = mdot_i * cp * (T_up - T_seg) + Q_pipe(T_seg)
@@ -157,7 +156,6 @@ def f(t, y, p):
 
     ## Supply pipes: radiator -> server
     # Upstream for first supply segment is radiator manifold coolant temperature.
-    # We haven't implemented T_cR dynamics yet, but it exists in state and can be used as boundary.
     T_cR = y[IDX["T_cR"]]
 
     # Branch A supply
@@ -208,7 +206,6 @@ def f(t, y, p):
     ## Radiator coolant manifold (well-mixed)
     T_cR = y[IDX["T_cR"]]
     T_r = y[IDX["T_r"]]
-    cp = p["cp"]
 
     # m_cR * cp * dT_cR/dt = mdot_tot*cp*(T_mix - T_cR) + UA_r*(T_r - T_cR)
     dy[IDX["T_cR"]] = (
@@ -247,6 +244,11 @@ def sanity_check_finite_and_signs():
     y[IDX["T_cB"]] = 300.0
     y[IDX["T_sup_B5"]] = 290.0
 
+    # turn off pipe radiation/solar for this test (pure advection)
+    p["alpha_p"] = 0.0
+    p["eps_p"] = 0.0
+    p["s_p"] = 0.0
+
     dy = f(0.0, y, p)
 
     assert np.all(np.isfinite(dy)), "Non-finite derivatives detected (NaN/Inf)."
@@ -255,10 +257,6 @@ def sanity_check_finite_and_signs():
     assert dy[IDX["T_cA"]] > 0.0, "Expected coolant A to warm when T_sA > T_cA."
     assert dy[IDX["T_cB"]] > 0.0, "Expected coolant B to warm when T_sB > T_cB."
 
-    # turn off pipe radiation/solar for this test (pure advection)
-    p["alpha_p"] = 0.0
-    p["eps_p"] = 0.0
-    p["s_p"] = 0.0
 
     # set a clear upstream boundary:
     y[IDX["T_cR"]] = 280.0      # supply boundary
