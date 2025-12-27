@@ -207,3 +207,5 @@ We can watch it change over time:
 ![alt text](images/image-2.png)
 
 ![alt text](images/image.png)
+
+![alt text](image.png)
