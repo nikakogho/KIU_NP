@@ -36,7 +36,7 @@ N_STATE = len(STATE_NAMES)
 def default_params():
     import numpy as np
 
-    # ---- Geometry assumptions (Option 2: 200 m per branch) ----
+    # Geometry assumptions (200 m per branch)
     rho = 1000.0      # kg/m^3 (water-ish)
     D   = 0.10        # m pipe inner diameter
     L_branch = 200.0  # m total (supply+return) per branch
@@ -49,7 +49,7 @@ def default_params():
 
     A_p_seg = np.pi * D * dx            # m^2 exposed surface per segment (for radiation/solar)
 
-    # ---- Thermal / operating assumptions ----
+    # Thermal / operating assumptions
     cp = 4180.0  # J/(kg*K)
 
     # 1 MW per branch with ~10K coolant rise => ~24 kg/s per branch
@@ -97,7 +97,7 @@ def default_params():
         "s_r": 0.0,
         "s_p": 0.0,
 
-        # (Optional: store geometry for debugging/printing)
+        # (store geometry for debugging/printing)
         "D": D,
         "dx": dx,
         "L_branch": L_branch,
@@ -243,7 +243,7 @@ def f(t, y, p):
         + p["UA_r"] * (T_r - T_cR)
     ) / (p["m_cR"] * cp)
 
-    ## Radiator panel (solid) with radiation + optional solar
+    ## Radiator panel (solid) with radiation + solar
     
     T_r = y[IDX["T_r"]]
     if not np.isfinite(T_r) or T_r < 0 or T_r > 5000:
