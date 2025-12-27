@@ -193,3 +193,7 @@ g(y) = y - y_n - dt * f(t_{n+1}, y) = 0
   * convergence rate
   * robustness
   * computational cost
+
+## Results
+In a simple straightforward run we see that Newton-Gauss-Seidel method is far more efficient, taking 6 iterations instead of 76
+![Fixed Point vs Newton-Gauss-Seidel](images/fixed_point_vs_ngs.png)
