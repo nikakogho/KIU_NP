@@ -131,7 +131,7 @@ def make_layout():
     """
     pos = {}
 
-    # Anchor positions (you can tweak these later)
+    # Anchor positions
     pos["T_sA"] = (-2.0,  0.6)
     pos["T_cA"] = (-1.3,  0.1)
 
@@ -378,48 +378,232 @@ def animate_network(t, Y, pos, edges, *,
 def Q_rad_surface(T, eps, A, p):
     return eps * p["sigma"] * A * (T**4 - p["T_bg"]**4)
 
+import time
+
+def run_one(method, y0, p, *, t0=0.0, tf=2000.0, dt=1.0,
+            fp_relax=0.2, fp_max_iter=200, ngs_max_iter=50,
+            tol_fp=1e-8, tol_ngs=1e-10):
+    """
+    Runs one simulation and returns a dict of metrics for comparison.
+    """
+    t_start = time.perf_counter()
+
+    if method == "fp":
+        # temporarily wrap simulate to pass fp settings without changing simulate signature too much
+        t, Y, st = simulate_fp(y0, t0, tf, dt, p,
+                              relax=fp_relax, max_iter=fp_max_iter, tol=tol_fp)
+    elif method == "ngs":
+        t, Y, st = simulate_ngs(y0, t0, tf, dt, p,
+                                max_iter=ngs_max_iter, tol=tol_ngs)
+    else:
+        raise ValueError("method must be 'fp' or 'ngs'")
+
+    elapsed = time.perf_counter() - t_start
+
+    ok = st["ok"]
+    iters = st["iters"]
+
+    metrics = {
+        "method": method,
+        "dt": dt,
+        "tf": tf,
+        "steps": len(t) - 1,
+        "ok_rate": float(ok.mean()),
+        "fail_steps": int((~ok).sum()),
+        "avg_iters": float(iters.mean()),
+        "p95_iters": float(np.percentile(iters, 95)),
+        "max_iters": int(iters.max()),
+        "runtime_s": float(elapsed),
+        # final temps (for sanity / accuracy comparison)
+        "T_sA_end": float(Y[-1, IDX["T_sA"]]),
+        "T_sB_end": float(Y[-1, IDX["T_sB"]]),
+        "T_cR_end": float(Y[-1, IDX["T_cR"]]),
+        "T_r_end":  float(Y[-1, IDX["T_r"]]),
+    }
+    return t, Y, st, metrics
+
+
+def simulate_fp(y0, t0, tf, dt, p, *, relax=0.2, max_iter=200, tol=1e-8):
+    n_steps = int(np.ceil((tf - t0) / dt))
+    t = np.linspace(t0, t0 + n_steps * dt, n_steps + 1)
+    Y = np.zeros((n_steps + 1, len(y0)))
+    Y[0] = y0.copy()
+
+    iters = np.zeros(n_steps, dtype=int)
+    ok = np.zeros(n_steps, dtype=bool)
+
+    for n in range(n_steps):
+        y_n = Y[n]
+        t_n = t[n]
+        y_np1, k, converged = step_implicit_euler_fixed_point(
+            t_n, y_n, dt, p, max_iter=max_iter, tol=tol, relax=relax
+        )
+        Y[n + 1] = y_np1
+        iters[n] = k
+        ok[n] = converged
+
+        if not np.all(np.isfinite(y_np1)):
+            raise FloatingPointError(f"Non-finite state at step {n}, t={t_n}")
+
+    return t, Y, {"iters": iters, "ok": ok}
+
+
+def simulate_ngs(y0, t0, tf, dt, p, *, max_iter=50, tol=1e-10):
+    n_steps = int(np.ceil((tf - t0) / dt))
+    t = np.linspace(t0, t0 + n_steps * dt, n_steps + 1)
+    Y = np.zeros((n_steps + 1, len(y0)))
+    Y[0] = y0.copy()
+
+    iters = np.zeros(n_steps, dtype=int)
+    ok = np.zeros(n_steps, dtype=bool)
+
+    for n in range(n_steps):
+        y_n = Y[n]
+        t_n = t[n]
+        y_np1, k, converged = step_implicit_euler_newton_gs(
+            t_n, y_n, dt, p, max_iter=max_iter, tol=tol
+        )
+        Y[n + 1] = y_np1
+        iters[n] = k
+        ok[n] = converged
+
+        if not np.all(np.isfinite(y_np1)):
+            raise FloatingPointError(f"Non-finite state at step {n}, t={t_n}")
+
+    return t, Y, {"iters": iters, "ok": ok}
+
+
+def compare_methods_dt_sweep(y0, p, *, t0=0.0, tf=2000.0, dts=(0.2, 0.5, 1.0, 2.0, 5.0, 10.0),
+                            fp_relax=0.2, fp_max_iter=300, ngs_max_iter=50):
+    """
+    Sweeps dt and returns:
+      results: list of dict metrics (2 per dt)
+      series:  dict keyed by (method, dt) -> (t, Y, st)
+    """
+    results = []
+    series = {}
+
+    for dt in dts:
+        # Fixed point
+        t_fp, Y_fp, st_fp, m_fp = run_one(
+            "fp", y0, p, t0=t0, tf=tf, dt=dt,
+            fp_relax=fp_relax, fp_max_iter=fp_max_iter,
+        )
+        results.append(m_fp)
+        series[("fp", dt)] = (t_fp, Y_fp, st_fp)
+
+        # NGS
+        t_ngs, Y_ngs, st_ngs, m_ngs = run_one(
+            "ngs", y0, p, t0=t0, tf=tf, dt=dt,
+            ngs_max_iter=ngs_max_iter,
+        )
+        results.append(m_ngs)
+        series[("ngs", dt)] = (t_ngs, Y_ngs, st_ngs)
+
+        # quick accuracy check: compare final states
+        # (not a "truth", but good to show FP vs NGS are solving same implicit step)
+        diff = np.max(np.abs(Y_fp[-1] - Y_ngs[-1]))
+        print(f"dt={dt:>6}  ok_fp={m_fp['ok_rate']:.2f}  ok_ngs={m_ngs['ok_rate']:.2f}  "
+              f"avgIter_fp={m_fp['avg_iters']:.1f}  avgSweep_ngs={m_ngs['avg_iters']:.1f}  "
+              f"final_inf_diff={diff:.3e}")
+
+    return results, series
+
+
+def plot_compare_time_series(t_fp, Y_fp, t_ngs, Y_ngs, *, title=""):
+    """
+    Overlay key temperatures for FP and NGS.
+    """
+    key = ["T_sA", "T_cA", "T_cR", "T_r"]
+    plt.figure(figsize=(10, 5))
+    for name in key:
+        i = IDX[name]
+        plt.plot(t_fp,  Y_fp[:, i],  label=f"{name} (FP)",  linestyle="-")
+        plt.plot(t_ngs, Y_ngs[:, i], label=f"{name} (NGS)", linestyle="--")
+    plt.xlabel("t (s)")
+    plt.ylabel("Temperature (K)")
+    plt.title(title or "Key temperatures: FP vs Newton–Gauss–Seidel")
+    plt.legend()
+    plt.grid(True, alpha=0.3)
+    plt.tight_layout()
+    plt.show()
+
+
+def plot_iters_hist(st_fp, st_ngs, *, title=""):
+    """
+    Compare iteration counts distribution.
+    """
+    plt.figure(figsize=(9, 4))
+    plt.hist(st_fp["iters"], bins=30, alpha=0.6, label="FP iters/step")
+    plt.hist(st_ngs["iters"], bins=30, alpha=0.6, label="NGS sweeps/step")
+    plt.xlabel("Iterations / sweeps per timestep")
+    plt.ylabel("Count")
+    plt.title(title or "Nonlinear solver effort per timestep")
+    plt.legend()
+    plt.grid(True, alpha=0.3)
+    plt.tight_layout()
+    plt.show()
+
+
+def results_to_markdown_table(results):
+    # group by dt
+    dts = sorted(set(r["dt"] for r in results))
+    rows = []
+    header = ("dt | FP ok% | FP avg it | FP p95 | FP time(s) | "
+              "NGS ok% | NGS avg sw | NGS p95 | NGS time(s)")
+    rows.append(header)
+    rows.append("---|---:|---:|---:|---:|---:|---:|---:|---:")
+
+    for dt in dts:
+        r_fp = next(r for r in results if r["dt"] == dt and r["method"] == "fp")
+        r_ng = next(r for r in results if r["dt"] == dt and r["method"] == "ngs")
+        rows.append(
+            f"{dt:g} | "
+            f"{100*r_fp['ok_rate']:.1f} | {r_fp['avg_iters']:.1f} | {r_fp['p95_iters']:.0f} | {r_fp['runtime_s']:.2f} | "
+            f"{100*r_ng['ok_rate']:.1f} | {r_ng['avg_iters']:.1f} | {r_ng['p95_iters']:.0f} | {r_ng['runtime_s']:.2f}"
+        )
+    return "\n".join(rows)
+
 if __name__ == "__main__":
     sanity_check_finite_and_signs()
 
     p = default_params()
 
-    # reasonable initial temps (Kelvin)
+    # Balanced-ish scenario (so it doesn't drift forever):
+    p["s_r"] = 0.025
+    p["s_p"] = 0.0
+
+    # Initial condition
     y0 = np.zeros(N_STATE)
     for name in STATE_NAMES:
         y0[IDX[name]] = 300.0
 
-    # no solar for now
-    p["s_r"] = 0.025
-    # p["s_p"] = 0.0
+    # 1) Run a dt sweep and collect metrics
+    dts = (0.5, 1.0, 2.0)
+    results, series = compare_methods_dt_sweep(
+        y0, p, t0=0.0, tf=500.0, dts=dts,
+        fp_relax=0.2, fp_max_iter=300, ngs_max_iter=50
+    )
 
-    #t_fp, Y_fp, st_fp = simulate("fp", y0, t0=0.0, tf=20.0, dt=0.1, p=p)
-    t_ngs, Y_ngs, st_ngs = simulate("ngs", y0, t0=0.0, tf=2000.0, dt=1.0, p=p)
+    # 2) Print a ready-to-paste markdown table for the report
+    print("\n=== Markdown table (paste into paper) ===\n")
+    print(results_to_markdown_table(results))
+    print("\n========================================\n")
 
-    #print("FP:  ok.mean() =", st_fp["ok"].mean(), " avg iters =", st_fp["iters"].mean())
-    #print("NGS: ok.mean() =", st_ngs["ok"].mean(), " avg sweeps =", st_ngs["iters"].mean())
-    #print("Final TsA FP:", Y_fp[-1, IDX["T_sA"]], "  NGS:", Y_ngs[-1, IDX["T_sA"]])
+    # 3) Pick ONE dt and show overlay plots + histogram
+    dt_show = 2.0
+    t_fp, Y_fp, st_fp = series[("fp", dt_show)]
+    t_ng, Y_ng, st_ng = series[("ngs", dt_show)]
 
-    Y = Y_ngs  # choose which to visualize
-    t = t_ngs
-    print("T_ret_A5:", Y[0, IDX["T_ret_A5"]], "->", Y[-1, IDX["T_ret_A5"]])
-    print("T_cR   :", Y[0, IDX["T_cR"]],     "->", Y[-1, IDX["T_cR"]])
-    print("T_r    :", Y[0, IDX["T_r"]],      "->", Y[-1, IDX["T_r"]])
+    plot_compare_time_series(
+        t_fp, Y_fp, t_ng, Y_ng,
+        title=f"FP vs Newton–GS (Implicit Euler), dt={dt_show}s"
+    )
+    plot_iters_hist(
+        st_fp, st_ng,
+        title=f"Nonlinear solver effort per timestep, dt={dt_show}s"
+    )
 
-    y = Y[-1]
-    P_in = P_A(t[-1]) + P_B(t[-1])
-
-    Qrad_r = Q_rad_surface(y[IDX["T_r"]], p["eps_r"], p["A_r"], p)
-
-    # pipes radiate too (if eps_p>0 and A_p>0)
-    pipe_names = [n for n in STATE_NAMES if n.startswith("T_sup_") or n.startswith("T_ret_")]
-    Qrad_p = 0.0
-    for n in pipe_names:
-        Qrad_p += Q_rad_surface(y[IDX[n]], p["eps_p"], p["A_p"], p)
-
-    print("P_in (W):", P_in)
-    print("Q_rad radiator (W):", Qrad_r)
-    print("Q_rad pipes (W):", Qrad_p)
-    print("Net (W) = P_in - Qrad_total:", P_in - (Qrad_r + Qrad_p))
-
-    pos, edges = make_layout()
-    animate_network(t_ngs, Y_ngs, pos, edges, stride=5, interval_ms=60)
+    # 4) animate the NGS solution
+    # pos, edges = make_layout()
+    # animate_network(t_ng, Y_ng, pos, edges, stride=5, interval_ms=60)
