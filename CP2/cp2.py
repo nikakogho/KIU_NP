@@ -9,9 +9,9 @@ from matplotlib.patches import Rectangle
 from model import IDX, N_STATE, STATE_NAMES, default_params, f, sanity_check_finite_and_signs
 
 
-# ----------------------------
+#
 # Implicit Euler core
-# ----------------------------
+#
 
 def g_residual(t_np1, y_guess, y_n, dt, p):
     """Implicit Euler residual: g(y) = y - y_n - dt * f(t_{n+1}, y)."""
@@ -138,9 +138,9 @@ def simulate(method, y0, t0, tf, dt, p):
     return t, Y, {"iters": iters, "ok": ok}
 
 
-# ----------------------------
+#
 # Network layout + rendering
-# ----------------------------
+#
 
 def make_layout():
     """
@@ -348,7 +348,7 @@ def animate_compare(
     Side-by-side animation with shared colormap.
     Robust vmin/vmax: computed ONLY from finite values.
     """
-    # -------- robust color scale (finite-only) --------
+    #---- robust color scale (finite-only)----
     if scale_exclude_servers:
         scale_names = [n for n in pos.keys() if n not in ("T_sA", "T_sB")]
         scale_idx = np.array([IDX[n] for n in scale_names], dtype=int)
@@ -419,9 +419,9 @@ def animate_compare(
     return anim
 
 
-# ----------------------------
+#
 # Minimal comparator suite
-# ----------------------------
+#
 
 def _select_state_indices(exclude_servers=True):
     """
@@ -669,14 +669,14 @@ def run_comparison_suite(
     return rows
 
 
-# ----------------------------
+#
 # Main
-# ----------------------------
+#
 
 if __name__ == "__main__":
     sanity_check_finite_and_signs()
 
-    # ---- baseline animation run (your original) ----
+    # baseline animation run
     p = default_params()
     y0 = np.full(N_STATE, 300.0, dtype=float)
     p["s_r"] = 0.0
@@ -697,8 +697,6 @@ if __name__ == "__main__":
         suptitle=f"FP vs Newton–GS (Implicit Euler), dt={dt:.1f}s"
     )
 
-    # ---- minimal comparison suite (fast-ish) ----
-    # Comment out if you only want the animation.
     run_comparison_suite(
         tf=500.0,
         dt_ref=0.25,
