@@ -99,3 +99,8 @@ Sampling order is:
 
 Finally, selected pixel coordinates are mapped into 3D world coordinates on a display plane (typically `z = 0`),
 scaled and centered consistently across all sub-problems.
+
+Example of anchoring for "Hello World" text, attainable by running 
+
+`python -m scripts.debug_anchors --text "Happy New Year!" --N 250 --show-mask`
+![anchoring hello world](results/anchoring_hello_world.png)
