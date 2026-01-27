@@ -12,3 +12,12 @@ build/
 .pytest_cache
 .ipynb_checkpoints
 .DS_Store
+
+# local runs / big artifacts
+results/
+*.npz
+*.npy
+
+# but keep curated artifacts
+!assets/reference_runs/*.npz
+!tests/data/*.npz
