@@ -17,6 +17,7 @@ build/
 results/
 *.npz
 *.npy
+src_aggregated.txt
 
 # but keep curated artifacts
 !assets/reference_runs/*.npz
