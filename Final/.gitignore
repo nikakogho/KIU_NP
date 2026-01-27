@@ -8,3 +8,7 @@ __pycache__/
 env/
 .env/
 build/
+.pytest_cache/
+.pytest_cache
+.ipynb_checkpoints
+.DS_Store
