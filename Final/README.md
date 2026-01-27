@@ -33,3 +33,69 @@ We avoid boundary value problem (BVP) solvers because:
 - **Inequality constraints** like collision avoidance ($\|x_i-x_j\| \ge R_{\text{safe}}$) and speed limits ($\|v_i\| \le v_{\max}$) are awkward to enforce in standard BVP formulations.
 - **Numerical brittleness:** BVPs are typically more brittle numerically for large coupled systems ($6N$ states) and require careful initial guesses.
 - **Natural fit for IVP:** The project inputs are naturally "start here and move forward," making **IVP simulation** simpler to implement, easier to validate, and easier to debug while still producing smooth trajectories.
+
+## Anchoring
+
+This project converts each desired figure (handwritten name, “Happy New Year!”) into **exactly N 3D anchor points**
+(one per drone). Drones are then assigned to anchors and track them with collision avoidance.
+
+We first render / load the figure as a **binary mask** `M` on a fixed canvas (e.g. 1200×300):
+- `M[y,x] = 1` means “this pixel belongs to the figure”
+- `M[y,x] = 0` means background
+
+From `M` we derive three candidate point sets:
+
+### Candidate sets (B, K, F)
+
+1) **Boundary / Outline (B)**  
+Boundary pixels form the silhouette, which is the most important cue for legibility in sparse dot displays.  
+Computed as:
+- `B = M AND (NOT erosion(M))`
+
+2) **Skeleton / Stroke centerline (K)**  
+A topology-preserving, 1-pixel-wide centerline of the figure, useful when N is small (handwriting becomes readable).  
+Computed via morphological skeletonization (iterated erosion/opening).
+
+3) **Fill / Interior (F)**  
+All remaining foreground pixels (optionally excluding the boundary) to make letters look “solid” when N is large.  
+Computed as:
+- `F = M AND (NOT B)`  (or simply all foreground pixels if desired)
+
+### Adaptive allocation of drones across B/K/F
+
+We adapt the visual style based on how many drones we have relative to the figure’s complexity.
+
+Let:
+- `P = |B|` be the boundary pixel count
+- `L = |K|` be the skeleton pixel count
+- `N` be the number of drones
+
+Define a density score:
+
+$$
+d = \frac{N}{L + 0.35P}
+$$
+
+We use three regimes:
+
+- **Sparse** (`d < 0.6`): maximize legibility with centerlines  
+  - `nK = N`, `nB = 0`, `nF = 0`
+
+- **Medium** (`0.6 ≤ d < 1.5`): add silhouette while keeping strokes readable  
+  - `nB = floor(0.35N)`, `nK = N - nB`, `nF = 0`
+
+- **Dense** (`d ≥ 1.5`): crisp outline + solid interior  
+  - `nB = floor(0.25N)`, `nF = N - nB`, `nK = 0` (optional: keep a small `nK` for handwriting)
+
+### Evenly-spaced sampling (anti-clumping)
+
+From each candidate set (B, K, F) we must pick exactly `nB`, `nK`, `nF` points.
+We do **evenly-spaced sampling** (greedy farthest-point / Poisson-disk-like) rather than uniform random sampling to avoid clumps and improve readability.
+
+Sampling order is:
+1) Boundary points (if used)
+2) Skeleton points (if used)
+3) Fill points (if used)
+
+Finally, selected pixel coordinates are mapped into 3D world coordinates on a display plane (typically `z = 0`),
+scaled and centered consistently across all sub-problems.
