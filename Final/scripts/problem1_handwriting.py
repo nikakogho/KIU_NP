@@ -1,14 +1,16 @@
-import numpy as np
 from matplotlib.image import imread
+import matplotlib.pyplot as plt
 
 from kiu_drone_show.pipelines import run_problem1_handwriting
+from kiu_drone_show.io_utils import save_run_npz
 from kiu_drone_show.visualization import animate_swarm_3d, AnimationConfig
 
-PATH = "assets/writing_nika_koghuashvili.png"
+IMG_PATH = "assets/writing_nika_koghuashvili.png"
+OUT_PATH = "results/problem1_handwriting_run.npz"
 
-img = imread(PATH)
+img = imread(IMG_PATH)
 
-out = run_problem1_handwriting(
+run = run_problem1_handwriting(
     img=img,
     N=250,
     init="cube",
@@ -17,9 +19,10 @@ out = run_problem1_handwriting(
     record_every=5,
 )
 
-print(out["metrics"])
+print(run["metrics"])
+save_run_npz(OUT_PATH, run)
+print("saved:", OUT_PATH)
 
-cfg = AnimationConfig(fps=30, every=1, point_size=18, trail=0, show_targets=True)
-anim = animate_swarm_3d(out["times"], out["X"], targets=out["targets_assigned"], cfg=cfg)
-import matplotlib.pyplot as plt
+cfg = AnimationConfig(show_targets=True)
+anim = animate_swarm_3d(run["times"], run["X"], targets=run["targets_assigned"], cfg=cfg)
 plt.show()
