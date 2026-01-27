@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Callable, Tuple
+from typing import Callable, Optional, Tuple
 
 import numpy as np
 
@@ -20,6 +20,7 @@ def step_semi_implicit_euler_method1(
     targets: np.ndarray,
     dt: float,
     params: DynamicsParams,
+    world_bounds: Optional[Tuple[float, float]] = None,
 ) -> StepResult:
     """
     One semi-implicit Euler step for Method 1:
@@ -40,6 +41,10 @@ def step_semi_implicit_euler_method1(
     v_next = saturate_vectors(v_next, params.vmax, eps=params.eps)
 
     x_next = x + dt * v_next
+
+    if world_bounds is not None:
+        lo, hi = map(float, world_bounds)
+        x_next = np.clip(x_next, lo, hi)
 
     return StepResult(x_next=x_next, v_next=v_next)
 

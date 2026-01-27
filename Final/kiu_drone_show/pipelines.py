@@ -112,7 +112,7 @@ def run_problem2_static_text(
                     break
 
         # constant targets for Problem 2
-        step = step_semi_implicit_euler_method1(x, v, targets_assigned, dt=dt, params=params)
+        step = step_semi_implicit_euler_method1(x, v, targets_assigned, dt=dt, params=params, world_bounds=(0.0, 100.0))
         x, v = step.x_next, step.v_next
         t += dt
 
