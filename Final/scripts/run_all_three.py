@@ -582,6 +582,8 @@ def main() -> None:
     ap.add_argument("--debug_video_centroids", action="store_true", help="show 3 debug frames with centroid overlay")
     ap.add_argument("--pause_s", type=float, default=1.0,
         help="Seconds to pause (hold last frame) between segments. 0 disables.")
+    ap.add_argument("--save_mp4", default="", help="path to save combined .mp4 (requires ffmpeg)")
+    ap.add_argument("--anim_fps", type=int, default=30, help="FPS for animation export")
 
 
     args = ap.parse_args()
@@ -711,7 +713,6 @@ def main() -> None:
 
     
     # Combine into one continuous trajectory
-    anim_fps = 30  # keep in sync with AnimationConfig below
     t_all, X_all, V_all, boundaries = concat_segments(
         [
             (p1["times"], p1["X"], p1["V"]),
@@ -719,7 +720,7 @@ def main() -> None:
             (p3["times"], p3["X"], p3["V"]),
         ],
         pause_s=float(args.pause_s),
-        anim_fps=anim_fps,
+        anim_fps=args.anim_fps,
     )
 
     combined = {
@@ -744,33 +745,52 @@ def main() -> None:
 
     
     # Animate combined
-    
-    if args.animate or args.save_gif:
+    save_paths = []
+    if args.save_gif:
+        save_paths.append(str(args.save_gif))
+    if args.save_mp4:
+        save_paths.append(str(args.save_mp4))
+
+    if args.animate or save_paths:
         trail_frames = int(args.trail)
         if args.trail_seconds and args.trail_seconds > 0:
-            # approx seconds per recorded frame (varies per segment, but close enough for display)
-            # we estimate from median time step in combined times
             dts = np.diff(t_all)
             med = float(np.median(dts)) if dts.size else 1 / 30
             trail_frames = int(round(float(args.trail_seconds) / max(med, 1e-9)))
 
-        cfg = AnimationConfig(
-            fps=anim_fps,
-            every=1,
-            point_size=18.0,
-            trail=max(0, trail_frames),
-            show_targets=False,
-        )
+    anim_fps = int(args.anim_fps)
 
-        anim = animate_swarm_3d(
-            t_all,
-            X_all,
-            targets=None,
-            out_path=(str(args.save_gif) if args.save_gif else None),
-            cfg=cfg,
-        )
-        if args.animate:
-            plt.show()
+    cfg = AnimationConfig(
+        fps=anim_fps,
+        every=1,
+        point_size=18.0,
+        trail=max(0, trail_frames),
+        show_targets=False,
+    )
+
+    # Create animation once
+    anim = animate_swarm_3d(
+        t_all,
+        X_all,
+        targets=None,
+        out_path=None,   # <- we save manually below
+        cfg=cfg,
+    )
+
+    # Save outputs (gif/mp4) if requested
+    for out_path in save_paths:
+        out_path_l = out_path.lower()
+        if out_path_l.endswith(".gif"):
+            from matplotlib.animation import PillowWriter
+            anim.save(out_path, writer=PillowWriter(fps=anim_fps))
+        elif out_path_l.endswith(".mp4"):
+            from matplotlib.animation import FFMpegWriter
+            anim.save(out_path, writer=FFMpegWriter(fps=anim_fps))
+        else:
+            raise ValueError("--save_gif must end with .gif and --save_mp4 must end with .mp4")
+
+    if args.animate:
+        plt.show()
 
 
 if __name__ == "__main__":
