@@ -163,10 +163,20 @@ d = \frac{N}{L + 0.35P}
 $
 
 Regimes:
+* **Sparse** ($d < 0.6$):
+    * `nK = N`
+    * `nB = 0`
+    * `nF = 0`
 
-* **Sparse** ((d < 0.6)): `nK = N`, `nB = 0`, `nF = 0`
-* **Medium** ((0.6 \le d < 1.5)): `nB = floor(0.35N)`, `nK = N - nB`, `nF = 0`
-* **Dense** ((d \ge 1.5)): `nB = floor(0.25N)`, `nF = N - nB`, `nK = 0`
+* **Medium** ($0.6 \le d < 1.5$):
+    * `nB = floor(0.35 * N)`
+    * `nK = N - nB`
+    * `nF = 0`
+
+* **Dense** ($d \ge 1.5$):
+    * `nB = floor(0.25 * N)`
+    * `nF = N - nB`
+    * `nK = 0`
 
 ### Evenly-spaced sampling (anti-clumping)
 
