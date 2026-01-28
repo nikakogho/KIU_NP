@@ -251,7 +251,7 @@ python -m scripts.run_all_three \
 (Requires ffmpeg on PATH for `.mp4`.)
 
 Example result of such run is 
-![This](assets/reference_runs/run_all_three.mp4)
+[this video](assets/reference_runs/run_all_three.mp4)
 
 ---
 
