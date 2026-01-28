@@ -158,9 +158,9 @@ Let:
 * (N) number of drones
 
 Density score:
-[
+$
 d = \frac{N}{L + 0.35P}
-]
+$
 
 Regimes:
 
