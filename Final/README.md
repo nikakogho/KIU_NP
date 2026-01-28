@@ -103,4 +103,12 @@ scaled and centered consistently across all sub-problems.
 Example of anchoring for "Hello World" text, attainable by running 
 
 `python -m scripts.debug_anchors --text "Happy New Year!" --N 250 --show-mask`
-![anchoring hello world](results/anchoring_hello_world.png)
+![anchoring hello world](assets/reference_runs/anchoring_hello_world.png)
+
+## Quick Start
+
+Run `pip install -r requirements.txt` and then feel free to run the scripts.
+
+For instance:
+
+`python -m scripts.run_all_three --video assets/arrows_moving.mp4 --image assets/writing_nika_koghuashvili.png --text "Happy New Year!" --N 220 --save_segments --animate --trail_seconds 1.5`
