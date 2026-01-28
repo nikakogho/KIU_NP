@@ -27,6 +27,83 @@ class WorldMappingInfo:
     # margin used (world units)
     margin: float
 
+@dataclass(frozen=True)
+class LinearPixelWorldInfo:
+    H: int
+    W: int
+    world_min: float
+    world_max: float
+    margin: float
+    invert_y: bool
+    usable: float  # world span after margins
+
+
+def centroids_pixels_to_world(
+    centroids_yx: np.ndarray,
+    *,
+    frame_H: int,
+    frame_W: int,
+    world_min: float = 0.0,
+    world_max: float = 100.0,
+    margin: float = 5.0,
+    z_plane: float = 0.0,
+    invert_y: bool = True,
+) -> tuple[np.ndarray, LinearPixelWorldInfo]:
+    """
+    Map pixel centroids (y,x) into world coords (x,y,z) with a FIXED linear mapping
+    based on the full frame size (H,W). This is stable over time.
+
+    x_pixel in [0, W-1] -> x_world in [world_min+margin, world_max-margin]
+    y_pixel in [0, H-1] -> y_world in [world_min+margin, world_max-margin] (inverted if invert_y)
+
+    Returns:
+      world_xyz: (K,3)
+      info: mapping parameters
+    """
+    cyx = np.asarray(centroids_yx, dtype=float)
+    if cyx.ndim != 2 or cyx.shape[1] != 2:
+        raise ValueError("centroids_yx must have shape (K,2) with columns (y,x)")
+    if frame_H <= 0 or frame_W <= 0:
+        raise ValueError("frame_H and frame_W must be positive")
+
+    if not (world_max > world_min):
+        raise ValueError("world_max must be > world_min")
+    span = float(world_max - world_min)
+    if margin < 0 or 2 * margin >= span:
+        raise ValueError("margin must be >=0 and less than half the world span")
+    usable = span - 2.0 * margin
+
+    y = cyx[:, 0]
+    x = cyx[:, 1]
+
+    # Avoid division by zero for degenerate sizes
+    denom_x = max(frame_W - 1, 1)
+    denom_y = max(frame_H - 1, 1)
+
+    nx = x / denom_x  # 0..1
+    ny = y / denom_y  # 0..1
+
+    X = world_min + margin + nx * usable
+    if invert_y:
+        Y = world_min + margin + (1.0 - ny) * usable
+    else:
+        Y = world_min + margin + ny * usable
+
+    Z = np.full_like(X, float(z_plane))
+
+    world_xyz = np.stack([X, Y, Z], axis=1)
+    world_xyz = np.clip(world_xyz, world_min, world_max)
+
+    info = LinearPixelWorldInfo(
+        H=int(frame_H),
+        W=int(frame_W),
+        world_min=float(world_min),
+        world_max=float(world_max),
+        margin=float(margin),
+        invert_y=bool(invert_y),
+        usable=float(usable),
+    )
+    return world_xyz, info
 
 def pixels_to_world(
     points_yx: np.ndarray,
