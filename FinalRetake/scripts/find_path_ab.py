@@ -6,7 +6,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 from navigation.preprocess import path_mask_from_bgr
-from navigation.grid_path import bfs_path
+from navigation.grid_path import bfs_path, dijkstra_center_path
+from navigation.polyline import rdp
 from scripts.preprocess_map import synthetic_map
 
 
@@ -16,6 +17,10 @@ def main():
     ap.add_argument("--synthetic", action="store_true")
     ap.add_argument("--out", type=str, default="runs/ab_path.png")
     ap.add_argument("--invert", type=str, default="auto", choices=["auto", "yes", "no"])
+    ap.add_argument("--method", type=str, default="center", choices=["bfs", "center"])
+    ap.add_argument("--rdp_eps", type=float, default=2.0)
+    ap.add_argument("--center_weight", type=float, default=6.0)
+
     args = ap.parse_args()
 
     os.makedirs(os.path.dirname(args.out) or ".", exist_ok=True)
@@ -34,13 +39,21 @@ def main():
     A = (int(xs[np.argmin(xs)]), int(ys[np.argmin(xs)]))
     B = (int(xs[np.argmax(xs)]), int(ys[np.argmax(xs)]))
 
-    path = bfs_path(mask, A, B)
+    if args.method == "bfs":
+        path = bfs_path(mask, A, B)
+    else:
+        path = dijkstra_center_path(mask, A, B, center_weight=args.center_weight)
+
+    if args.rdp_eps > 0:
+        path_s = rdp(path, epsilon=args.rdp_eps)
+    else:
+        path_s = path
 
     rgb = cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
 
     plt.figure(figsize=(10, 4))
     plt.imshow(rgb)
-    plt.plot(path[:, 0], path[:, 1], linewidth=2)
+    plt.plot(path_s[:, 0], path_s[:, 1], linewidth=2)
     plt.scatter([A[0], B[0]], [A[1], B[1]], marker="x")
     plt.title("A→B pixel path (BFS)")
     plt.axis("off")
