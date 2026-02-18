@@ -48,8 +48,8 @@ def test_problem2_no_collisions_and_stays_inside():
             assert 0 <= x < W and 0 <= y < H
             assert safe[y, x] > 0
 
-    # 2) no collisions: center distance should stay above ~2r (give a small tolerance)
-    assert min_d > (2.0 * robot_r - 1.0)
+    # 2) no collisions: center distance should stay above 2r
+    assert min_d >= (2.0 * robot_r)
 
     # 3) progress: simulation should run enough steps to meaningfully move
     assert traj.shape[0] > 50

@@ -11,6 +11,28 @@ from navigation.corridor import (
     snap_point_inside,
 )
 
+def _enforce_group_spacing_along_s(s_ref: np.ndarray, n_each: int, spacing_min: float, L: float) -> None:
+    """
+    Keep robots in each group ordered and separated along arc-length by spacing_min.
+    Modifies s_ref in-place.
+    Convention:
+      forward group indices [0..n_each-1] move increasing s
+      backward group indices [n_each..2*n_each-1] move decreasing s
+    """
+    spacing_min = float(spacing_min)
+
+    # forward: require s[i+1] - s[i] >= spacing_min  ->  s[i] <= s[i+1] - spacing_min
+    for i in range(n_each - 2, -1, -1):
+        s_ref[i] = min(float(s_ref[i]), float(s_ref[i + 1]) - spacing_min)
+
+    # backward: initial ordering is s[n_each] > s[n_each+1] > ...
+    # require s[i] - s[i+1] >= spacing_min  ->  s[i+1] <= s[i] - spacing_min
+    for i in range(n_each, 2 * n_each - 1):
+        s_ref[i + 1] = min(float(s_ref[i + 1]), float(s_ref[i]) - spacing_min)
+
+    s_ref[:] = np.clip(s_ref, 0.0, float(L))
+
+
 def _resolve_collisions_inplace(
     x: np.ndarray,
     *,
@@ -149,6 +171,7 @@ def simulate_problem2_bidirectional(
     k_wall: float = 120.0,
     # termination
     goal_tol_px: float = 10.0,
+    sep_buffer_px: float = 2.0,
 ) -> dict:
     """
     Two swarms:
@@ -195,6 +218,9 @@ def simulate_problem2_bidirectional(
 
     # per-robot progress + local closest indices
     s_ref = np.concatenate([s_f, s_b]).astype(np.float32)
+    spacing_min = 2.0 * robot_radius_px + 2.0   # 2px buffer (tweakable)
+    _enforce_group_spacing_along_s(s_ref, n_each, spacing_min, L)
+
     idx_prev = np.zeros(N, dtype=np.int32)
     projected = 0
 
@@ -251,21 +277,18 @@ def simulate_problem2_bidirectional(
         )
 
         # hard constraints phase (PBD-style)
-        # 1) snap to safe region first (walls)
+        # snap to safe region first (walls)
         projected += _snap_all_inside_safe(x_new, safe_mask255)
 
-        # 2) resolve inter-robot collisions (push apart)
-        d_min = float(2.0 * robot_radius_px)
-        _resolve_collisions_inplace(x_new, d_min=d_min, iters=5)
+        # resolve inter-robot collisions (push apart)
+        d_min = float(2.0 * robot_radius_px + sep_buffer_px)
+        _resolve_collisions_inplace(x_new, d_min=d_min, iters=8)
 
-        # 3) collision pushing can move someone into wall -> snap again
-        projected += _snap_all_inside_safe(x_new, safe_mask255)
+        for _ in range(8):
+            projected += _snap_all_inside_safe(x_new, safe_mask255)
+            _resolve_collisions_inplace(x_new, d_min=d_min, iters=3)
 
-        # 4) one more collision pass after snapping (usually cheap and stabilizing)
-        _resolve_collisions_inplace(x_new, d_min=d_min, iters=3)
-        projected += _snap_all_inside_safe(x_new, safe_mask255)
-
-        # 5) velocities must match corrected positions (otherwise they "teleport" but keep old v)
+        # velocities must match corrected positions (otherwise they "teleport" but keep old v)
         v_new = (x_new - x) / float(dt)
         v_new = sat_velocity(v_new, v_max=float(v_max))
 
