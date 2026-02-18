@@ -74,3 +74,35 @@ def step_ivp(
 
     x_new = x + dt * v_new
     return x_new, v_new
+
+def step_ivp_ext(
+    x: np.ndarray,
+    v: np.ndarray,
+    T: np.ndarray,
+    f_ext: np.ndarray,
+    *,
+    dt: float,
+    m: float,
+    k_p: float,
+    k_d: float,
+    k_rep: float,
+    R_safe: float,
+    v_max: float,
+) -> tuple[np.ndarray, np.ndarray]:
+    """
+    Same as step_ivp, but includes an external force term f_ext (N,d).
+
+      a = (1/m) [ k_p (T - x) + sum repulsion + f_ext - k_d v ]
+    """
+    x = np.asarray(x, dtype=float)
+    v = np.asarray(v, dtype=float)
+    T = np.asarray(T, dtype=float)
+    f_ext = np.asarray(f_ext, dtype=float)
+
+    f_rep = repulsion_forces(x, k_rep=k_rep, R_safe=R_safe)
+    a = (k_p * (T - x) + f_rep + f_ext - k_d * v) / m
+
+    v_new = v + dt * a
+    v_new = sat_velocity(v_new, v_max=v_max)
+    x_new = x + dt * v_new
+    return x_new, v_new
