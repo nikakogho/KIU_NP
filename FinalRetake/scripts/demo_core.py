@@ -1,5 +1,6 @@
 from __future__ import annotations
 import argparse
+import os
 import numpy as np
 import matplotlib.pyplot as plt
 from navigation.dynamics import step_ivp
@@ -31,6 +32,10 @@ def main():
         traj.append(x.copy())
 
     traj = np.vstack(traj)
+
+    output_dir = os.path.dirname(args.out)
+    if output_dir:
+        os.makedirs(output_dir, exist_ok=True)
 
     plt.figure()
     plt.plot(traj[:, 0], traj[:, 1], marker=".", markersize=2)
