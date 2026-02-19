@@ -1,7 +1,7 @@
 import os
 from pathlib import Path
 
-folders = ['navigation', 'scripts', 'tests']
+folders = ['navigation', 'scripts']
 
 def aggregate_python_files(folders, output_file='aggregated_code.txt'):
     """

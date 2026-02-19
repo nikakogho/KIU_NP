@@ -7,27 +7,16 @@ import matplotlib.pyplot as plt
 
 from navigation.preprocess import path_mask_from_bgr
 
-
 def synthetic_map(w=900, h=500, path_w=60) -> np.ndarray:
-    """
-    Simple synthetic map: dark background + bright curvy road.
-    Returns BGR uint8.
-    """
     img = np.zeros((h, w, 3), dtype=np.uint8)
     img[:] = (25, 25, 25)
 
     pts = np.array([
-        [80, 380],
-        [200, 320],
-        [320, 350],
-        [450, 260],
-        [600, 280],
-        [780, 160],
+        [80, 380], [200, 320], [320, 350], [450, 260], [600, 280], [780, 160],
     ], dtype=np.int32)
 
     cv2.polylines(img, [pts], isClosed=False, color=(230, 230, 230), thickness=path_w, lineType=cv2.LINE_AA)
 
-    # add some noise blobs
     rng = np.random.default_rng(0)
     for _ in range(80):
         x = int(rng.integers(0, w))
@@ -37,7 +26,6 @@ def synthetic_map(w=900, h=500, path_w=60) -> np.ndarray:
 
     return img
 
-
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--in", dest="inp", type=str, default=None)
@@ -45,6 +33,12 @@ def main():
     ap.add_argument("--out", type=str, default="runs/path_mask.png")
     ap.add_argument("--debug", type=str, default="runs/preprocess_debug.png")
     ap.add_argument("--invert", type=str, default="auto", choices=["auto", "yes", "no"])
+    
+    # Image preprocessing params for thin walls
+    ap.add_argument("--blur", type=int, default=5, help="Gaussian blur kernel size (odd number)")
+    ap.add_argument("--close_k", type=int, default=9, help="Morphological close kernel size (odd number)")
+    ap.add_argument("--open_k", type=int, default=3, help="Morphological open kernel size (odd number)")
+
     args = ap.parse_args()
 
     os.makedirs(os.path.dirname(args.out) or ".", exist_ok=True)
@@ -57,11 +51,17 @@ def main():
         if bgr is None:
             raise SystemExit(f"Could not read image: {args.inp}")
 
-    mask = path_mask_from_bgr(bgr, invert=args.invert)
+    # Pass the new preprocessing arguments here
+    mask = path_mask_from_bgr(
+        bgr, 
+        invert=args.invert,
+        blur_ksize=args.blur,
+        close_ksize=args.close_k,
+        open_ksize=args.open_k
+    )
 
     cv2.imwrite(args.out, mask)
 
-    # Debug figure
     rgb = cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
     plt.figure(figsize=(10, 4))
     plt.subplot(1, 2, 1)
@@ -76,7 +76,6 @@ def main():
 
     plt.tight_layout()
     plt.savefig(args.debug, dpi=150)
-
 
 if __name__ == "__main__":
     main()
