@@ -177,7 +177,7 @@ Files:
 * `navigation/corridor.py` (erosion, distance transform, wall force, snapping)
 
 ## Example
-![](runs/problem1_follow.png)
+![p1](runs/problem1_follow.png)
 
 ---
 
