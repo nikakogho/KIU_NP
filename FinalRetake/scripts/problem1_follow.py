@@ -17,6 +17,8 @@ def main():
     ap.add_argument("--out", type=str, default="runs/problem1_follow.png")
     ap.add_argument("--invert", type=str, default="auto", choices=["auto", "yes", "no"])
 
+    ap.add_argument("--replay_npz", type=str, default=None)
+
     # A/B optional
     ap.add_argument("--Ax", type=int, default=None)
     ap.add_argument("--Ay", type=int, default=None)
@@ -72,9 +74,26 @@ def main():
         s_rate_px_s=args.s_rate,
     )
 
-    traj = sim["traj"]
+    traj = sim["traj"]              # (T,2)
     safe_mask = sim["safe_mask255"]
     proj = sim["projected_count"]
+
+    # dump replay npz for video export
+    if args.replay_npz is not None:
+        os.makedirs(os.path.dirname(args.replay_npz) or ".", exist_ok=True)
+        fps = int(max(1, round(1.0 / float(args.dt))))
+        np.savez_compressed(
+            args.replay_npz,
+            bg_bgr=bgr,
+            mask255=mask,
+            safe_mask255=safe_mask,
+            traj=traj.astype(np.float32),
+            robot_radius_px=np.array([args.robot_r], dtype=np.int32),
+            fps=np.array([fps], dtype=np.int32),
+            A=np.array(A, dtype=np.int32),
+            B=np.array(B, dtype=np.int32),
+            dt=np.array([args.dt], dtype=np.float32),
+        )
 
     rgb = cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
 

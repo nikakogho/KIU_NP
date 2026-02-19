@@ -18,6 +18,9 @@ def main():
     ap.add_argument("--out", type=str, default="runs/problem2_swarm.png")
     ap.add_argument("--invert", type=str, default="auto", choices=["auto", "yes", "no"])
 
+    # optional replay dump for video export
+    ap.add_argument("--replay_npz", type=str, default=None)
+
     ap.add_argument("--n_each", type=int, default=6)
     ap.add_argument("--robot_r", type=int, default=8)
     ap.add_argument("--lane", type=float, default=12.0)
@@ -59,6 +62,24 @@ def main():
     mind = float(np.min(sim["min_dist_over_time"]))
     proj = sim["projected_count"]
 
+    # dump replay npz for video export
+    if args.replay_npz is not None:
+        os.makedirs(os.path.dirname(args.replay_npz) or ".", exist_ok=True)
+        fps = int(max(1, round(1.0 / float(args.dt))))
+        np.savez_compressed(
+            args.replay_npz,
+            bg_bgr=bgr,
+            mask255=mask,
+            safe_mask255=safe,
+            traj=traj.astype(np.float32),
+            robot_radius_px=np.array([args.robot_r], dtype=np.int32),
+            fps=np.array([fps], dtype=np.int32),
+            group_split=np.array([args.n_each], dtype=np.int32),  # first n_each vs second n_each
+            A=np.array(A, dtype=np.int32),
+            B=np.array(B, dtype=np.int32),
+            dt=np.array([args.dt], dtype=np.float32),
+        )
+
     rgb = cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
     T, N, _ = traj.shape
     n_each = args.n_each
@@ -69,10 +90,7 @@ def main():
 
     # plot trajectories
     for i in range(N):
-        if i < n_each:
-            plt.plot(traj[:, i, 0], traj[:, i, 1], linewidth=1.6, alpha=0.9)
-        else:
-            plt.plot(traj[:, i, 0], traj[:, i, 1], linewidth=1.6, alpha=0.9)
+        plt.plot(traj[:, i, 0], traj[:, i, 1], linewidth=1.6, alpha=0.9)
 
     # start/end markers
     plt.scatter([A[0], B[0]], [A[1], B[1]], marker="x", s=90, label="A,B")

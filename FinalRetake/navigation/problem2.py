@@ -11,6 +11,7 @@ from navigation.corridor import (
     snap_point_inside,
 )
 
+
 def _enforce_group_spacing_along_s(s_ref: np.ndarray, n_each: int, spacing_min: float, L: float) -> None:
     """
     Keep robots in each group ordered and separated along arc-length by spacing_min.
@@ -87,6 +88,7 @@ def _snap_all_inside_safe(x: np.ndarray, safe_mask255: np.ndarray) -> int:
             snapped += 1
     return snapped
 
+
 def _closest_index_local(p: np.ndarray, samples: np.ndarray, idx_prev: int, window: int) -> int:
     n = samples.shape[0]
     i0 = max(0, int(idx_prev) - int(window))
@@ -95,6 +97,19 @@ def _closest_index_local(p: np.ndarray, samples: np.ndarray, idx_prev: int, wind
     d2 = np.sum((seg - p[None, :]) ** 2, axis=1)
     j = int(np.argmin(d2))
     return i0 + j
+
+
+def _init_indices_global(x: np.ndarray, samples: np.ndarray) -> np.ndarray:
+    """
+    One-time global nearest-sample index for each robot.
+    This removes the A->B / B->A asymmetry from idx_prev initialization.
+    """
+    N = x.shape[0]
+    idx = np.zeros(N, dtype=np.int32)
+    for i in range(N):
+        d2 = np.sum((samples - x[i][None, :]) ** 2, axis=1)
+        idx[i] = int(np.argmin(d2))
+    return idx
 
 
 def lane_point(
@@ -206,24 +221,29 @@ def simulate_problem2_bidirectional(
     # build initial positions on lanes
     x0 = []
     for i in range(n_each):
-        x0.append(lane_point(spline, float(s_f[i]),
-                             lane_offset_px=lane_offset_px, side_sign=+1.0,
-                             safe_mask255=safe_mask255))
+        x0.append(lane_point(
+            spline, float(s_f[i]),
+            lane_offset_px=lane_offset_px, side_sign=+1.0,
+            safe_mask255=safe_mask255
+        ))
     for i in range(n_each):
-        x0.append(lane_point(spline, float(s_b[i]),
-                             lane_offset_px=lane_offset_px, side_sign=-1.0,
-                             safe_mask255=safe_mask255))
+        x0.append(lane_point(
+            spline, float(s_b[i]),
+            lane_offset_px=lane_offset_px, side_sign=-1.0,
+            safe_mask255=safe_mask255
+        ))
     x = np.vstack(x0).astype(np.float32)
     v = np.zeros((N, 2), dtype=np.float32)
 
-    # per-robot progress + local closest indices
+    # per-robot progress
     s_ref = np.concatenate([s_f, s_b]).astype(np.float32)
-    spacing_min = 2.0 * robot_radius_px + 2.0   # 2px buffer (tweakable)
+    spacing_min = 2.0 * robot_radius_px + 2.0
     _enforce_group_spacing_along_s(s_ref, n_each, spacing_min, L)
 
-    idx_prev = np.zeros(N, dtype=np.int32)
-    projected = 0
+    # initialize each robot's closest-point index globally once
+    idx_prev = _init_indices_global(x, p_samples)
 
+    projected = 0
     traj = [x.copy()]
     min_dist_hist = [float(_pairwise_min_distance(x))]
 
@@ -277,10 +297,8 @@ def simulate_problem2_bidirectional(
         )
 
         # hard constraints phase (PBD-style)
-        # snap to safe region first (walls)
         projected += _snap_all_inside_safe(x_new, safe_mask255)
 
-        # resolve inter-robot collisions (push apart)
         d_min = float(2.0 * robot_radius_px + sep_buffer_px)
         _resolve_collisions_inplace(x_new, d_min=d_min, iters=8)
 
@@ -288,10 +306,9 @@ def simulate_problem2_bidirectional(
             projected += _snap_all_inside_safe(x_new, safe_mask255)
             _resolve_collisions_inplace(x_new, d_min=d_min, iters=3)
 
-        # velocities must match corrected positions (otherwise they "teleport" but keep old v)
+        # velocities must match corrected positions
         v_new = (x_new - x) / float(dt)
         v_new = sat_velocity(v_new, v_max=float(v_max))
-
 
         x, v = x_new.astype(np.float32), v_new.astype(np.float32)
         traj.append(x.copy())
@@ -310,7 +327,6 @@ def simulate_problem2_bidirectional(
                 break
 
         if ok_f and ok_b:
-            # additionally ensure near the endpoints in Euclidean terms
             gB = np.array([float(B[0]), float(B[1])], dtype=np.float32)
             gA = np.array([float(A[0]), float(A[1])], dtype=np.float32)
             near = True

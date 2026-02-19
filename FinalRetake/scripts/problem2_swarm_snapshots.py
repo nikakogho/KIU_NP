@@ -18,6 +18,9 @@ def main():
     ap.add_argument("--out", type=str, default="runs/problem2_snapshots.png")
     ap.add_argument("--invert", type=str, default="auto", choices=["auto", "yes", "no"])
 
+    # optional replay dump for video export
+    ap.add_argument("--replay_npz", type=str, default=None)
+
     ap.add_argument("--n_each", type=int, default=6)
     ap.add_argument("--robot_r", type=int, default=8)
     ap.add_argument("--lane", type=float, default=12.0)
@@ -59,6 +62,24 @@ def main():
     safe = sim["safe_mask255"]
     mind = sim["min_dist_over_time"] # (T,)
 
+    # dump replay npz for video export
+    if args.replay_npz is not None:
+        os.makedirs(os.path.dirname(args.replay_npz) or ".", exist_ok=True)
+        fps = int(max(1, round(1.0 / float(args.dt))))
+        np.savez_compressed(
+            args.replay_npz,
+            bg_bgr=bgr,
+            mask255=mask,
+            safe_mask255=safe,
+            traj=traj.astype(np.float32),
+            robot_radius_px=np.array([args.robot_r], dtype=np.int32),
+            fps=np.array([fps], dtype=np.int32),
+            group_split=np.array([args.n_each], dtype=np.int32),
+            A=np.array(A, dtype=np.int32),
+            B=np.array(B, dtype=np.int32),
+            dt=np.array([args.dt], dtype=np.float32),
+        )
+
     t_min = int(np.argmin(mind))
     frames = [0, t_min, traj.shape[0] - 1]
 
@@ -72,10 +93,7 @@ def main():
 
         t0 = max(0, t - int(args.trail))
         for i in range(N):
-            # short trail
             ax.plot(traj[t0:t+1, i, 0], traj[t0:t+1, i, 1], linewidth=1.4, alpha=0.9)
-
-            # robot disk at time t
             c = traj[t, i]
             circ = plt.Circle((c[0], c[1]), args.robot_r, fill=False, linewidth=1.2)
             ax.add_patch(circ)
