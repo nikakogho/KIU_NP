@@ -20,6 +20,7 @@ def main():
     ap.add_argument("--invert", type=str, default="auto", choices=["auto", "yes", "no"])
     ap.add_argument("--replay_npz", type=str, default=None)
 
+    # Swarm Params
     ap.add_argument("--n_each", type=int, default=6)
     ap.add_argument("--robot_r", type=int, default=8)
     ap.add_argument("--lane", type=float, default=12.0)
@@ -27,10 +28,20 @@ def main():
     ap.add_argument("--dt", type=float, default=0.05)
     ap.add_argument("--steps", type=int, default=900)
 
-    # Image preprocessing params for thin walls
-    ap.add_argument("--blur", type=int, default=5, help="Gaussian blur kernel size (odd number)")
-    ap.add_argument("--close_k", type=int, default=9, help="Morphological close kernel size (odd number)")
-    ap.add_argument("--open_k", type=int, default=3, help="Morphological open kernel size (odd number)")
+    # Dynamics & Target Tracking Params (Exposed for sharp corners)
+    ap.add_argument("--lookahead", type=float, default=28.0)
+    ap.add_argument("--s_rate", type=float, default=75.0)
+    ap.add_argument("--local_window", type=int, default=80)
+
+    # Spline Pathing Params (Exposed to fix hugging corners)
+    ap.add_argument("--center_weight", type=float, default=9.0, help="Higher = strict center, Lower = shortest path")
+    ap.add_argument("--rdp_eps", type=float, default=2.0)
+    ap.add_argument("--smooth_win", type=int, default=7)
+
+    # Preprocessing
+    ap.add_argument("--blur", type=int, default=5)
+    ap.add_argument("--close_k", type=int, default=9)
+    ap.add_argument("--open_k", type=int, default=3)
 
     args = ap.parse_args()
     os.makedirs(os.path.dirname(args.out) or ".", exist_ok=True)
@@ -42,7 +53,6 @@ def main():
         if bgr is None:
             raise SystemExit(f"Could not read image: {args.inp}")
 
-    # Pass the new preprocessing arguments here
     mask = path_mask_from_bgr(
         bgr, 
         invert=args.invert,
@@ -58,13 +68,20 @@ def main():
     A, B = pts[0], pts[1]
 
     try:
-        A = snap_to_mask(mask, A, max_r=50)
-        B = snap_to_mask(mask, B, max_r=50)
+        A = snap_to_mask(mask, A, max_r=80)
+        B = snap_to_mask(mask, B, max_r=80)
     except ValueError:
         raise SystemExit("Clicked too far from any valid path. Try clicking closer to the center.")
 
-    spline = build_center_spline_from_mask(mask, A, B, center_weight=9.0, rdp_eps=2.0, smooth_win=7)
+    # Pass the exposed parameters to the spline builder
+    spline = build_center_spline_from_mask(
+        mask, A, B, 
+        center_weight=args.center_weight, 
+        rdp_eps=args.rdp_eps, 
+        smooth_win=args.smooth_win
+    )
 
+    # Pass dynamics parameters to the solver
     sim = simulate_problem2_bidirectional(
         mask, spline,
         A=A, B=B,
@@ -74,6 +91,9 @@ def main():
         spacing_px=args.spacing,
         dt=args.dt,
         steps=args.steps,
+        lookahead_px=args.lookahead,
+        s_rate_px_s=args.s_rate,
+        local_window=args.local_window
     )
 
     traj = sim["traj"]  # (T,N,2)
