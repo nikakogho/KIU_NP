@@ -34,7 +34,7 @@ You will find:
 Each robot has position $x \in \mathbb{R}^2$ and velocity $v \in \mathbb{R}^2$. We use a target-tracking + damping + repulsion model:
 
 $$
-a(x,v) = \frac{1}{m}\Big(k_p(T-x) ;-; k_d v ;+; f_{\text{rep}}(x) ;+; f_{\text{ext}}(x)\Big)
+a(x,v) = \frac{1}{m}\Big(k_p(T-x) - k_d v + f_{\text{rep}}(x) + f_{\text{ext}}(x)\Big)
 $$
 
 Semi-implicit Euler step (stable for “mass-spring-damper”-style motion):
